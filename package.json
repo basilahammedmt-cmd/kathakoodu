@@ -1,0 +1,8 @@
+{
+  "name": "kathakoodu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "കഥക്കൂട് — കുട്ടികളുടെ സൃഷ്ടികൾ സംസാരിക്കുന്ന വീഡിയോയും പുസ്തകവും ആക്കുന്ന വെബ് ആപ്പ്",
+  "engines": { "node": ">=20" }
+}
