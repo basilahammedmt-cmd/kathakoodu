@@ -383,7 +383,7 @@ function workView(){
   if(!cur){return shelfView()}
   return '<div class="row between"><a class="btn ghost" href="#shelf" style="text-decoration:none">← ഷെൽഫ്</a>'+(cur.demo?'<span class="chip demo">ഉദാഹരണം, സേവ് ആകില്ല</span>':
     (confirmDel?'<span class="row"><button class="btn danger" data-act="delYes">ഉറപ്പായും കളയുക</button><button class="btn ghost" data-act="delNo">വേണ്ട</button></span>':'<button class="btn ghost" data-act="del">കളയുക</button>'))+'</div>'+
-    '<div><h2 style="font-family:var(--hand);font-weight:400;font-size:1.8rem">'+esc(cur.title)+'</h2><p class="muted small">'+esc(KINDS[cur.kind]||'')+' · എഴുതിയത്: '+esc(cur.child)+'</p></div>'+
+    '<div><h2 style="font-size:1.6rem">'+esc(cur.title)+'</h2><p class="muted small">'+esc(KINDS[cur.kind]||'')+' · എഴുതിയത്: '+esc(cur.child)+'</p></div>'+
     '<div class="stepper" role="tablist">'+STEPS.map((s,i)=>'<button data-act="step" data-n="'+i+'" aria-current="'+(i===step)+'"><b>'+(i+1)+'</b>'+s+'</button>').join('')+'</div>'+
     '<div id="stepBox">'+stepHTML()+'</div>';
 }
