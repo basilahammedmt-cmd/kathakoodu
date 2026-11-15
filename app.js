@@ -4,52 +4,21 @@
 const app=document.getElementById('app'), toastEl=document.getElementById('toast');
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-const CAST={
-  mittu:{name:'മിട്ടു',what:'തത്ത',trait:'വാചാലൻ, തമാശക്കാരൻ. കഥ പറഞ്ഞുതുടങ്ങുന്നത് മിട്ടുവാണ്.',
-    svg:'<svg viewBox="0 0 120 120"><path d="M38 84 L14 112 L46 98Z" fill="#1f8a4c"/><ellipse cx="62" cy="74" rx="30" ry="36" fill="#34b866"/><ellipse cx="70" cy="80" rx="15" ry="24" fill="#1f8a4c"/><circle cx="70" cy="36" r="24" fill="#3fca74"/><path d="M90 30 q22 6 6 24 q-10 -4 -10 -14z" fill="#e2483d"/><circle cx="76" cy="30" r="6" fill="#fff"/><circle cx="78" cy="30" r="3" fill="#1b2a30"/><path d="M52 110h8M66 110h8" stroke="#e08a1e" stroke-width="5" stroke-linecap="round" fill="none"/></svg>'},
-  appu:{name:'അപ്പു',what:'ആനക്കുട്ടി',trait:'ശാന്തൻ, ദയയുള്ളവൻ. കൂട്ടുകാരെ സഹായിക്കും.',
-    svg:'<svg viewBox="0 0 120 120"><ellipse cx="22" cy="52" rx="20" ry="28" fill="#7f97a8"/><ellipse cx="98" cy="52" rx="20" ry="28" fill="#7f97a8"/><ellipse cx="22" cy="54" rx="11" ry="18" fill="#e7b3b0"/><ellipse cx="98" cy="54" rx="11" ry="18" fill="#e7b3b0"/><circle cx="60" cy="54" r="36" fill="#9db2c1"/><path d="M52 70 q0 34 16 36 q12 0 10 -12 q-8 4 -8 -24z" fill="#8aa1b1"/><circle cx="46" cy="48" r="5" fill="#1b2a30"/><circle cx="74" cy="48" r="5" fill="#1b2a30"/><circle cx="47.500" cy="46.500" r="1.600" fill="#fff"/><circle cx="75.500" cy="46.500" r="1.600" fill="#fff"/></svg>'},
-  meenu:{name:'മീനു',what:'9 വയസ്സുള്ള കുട്ടി',trait:'ജിജ്ഞാസു. എപ്പോഴും ചോദ്യങ്ങൾ ചോദിക്കും.',
-    svg:'<svg viewBox="0 0 120 120"><path d="M30 116 q30 -52 60 0z" fill="#e2483d"/><path d="M26 44 q-10 30 -2 44" stroke="#22191a" stroke-width="9" stroke-linecap="round" fill="none"/><path d="M94 44 q10 30 2 44" stroke="#22191a" stroke-width="9" stroke-linecap="round" fill="none"/><circle cx="60" cy="48" r="30" fill="#c98b5e"/><path d="M30 46 q4 -34 30 -32 q26 -2 30 32 q-16 -18 -30 -16 q-14 -2 -30 16z" fill="#22191a"/><circle cx="49" cy="52" r="4" fill="#1b2a30"/><circle cx="71" cy="52" r="4" fill="#1b2a30"/><path d="M50 64 q10 8 20 0" stroke="#7a2d22" stroke-width="3" stroke-linecap="round" fill="none"/><circle cx="24" cy="90" r="5" fill="#f0ac12"/><circle cx="96" cy="90" r="5" fill="#f0ac12"/></svg>'},
-  kunjan:{name:'കുഞ്ഞൻ',what:'അണ്ണാൻ',trait:'കുസൃതിക്കാരൻ. തമാശയും അബദ്ധങ്ങളും കുഞ്ഞന്റെ വകയാണ്.',
-    svg:'<svg viewBox="0 0 120 120"><path d="M78 108 q40 -10 26 -58 q-8 -26 -30 -14 q20 6 14 34 q-4 20 -22 26z" fill="#a8672f"/><ellipse cx="54" cy="82" rx="24" ry="30" fill="#c58142"/><ellipse cx="54" cy="88" rx="13" ry="19" fill="#f3dcbd"/><path d="M38 20l6 16h-12zM66 20l6 16h-12z" fill="#a8672f"/><circle cx="52" cy="44" r="22" fill="#c58142"/><path d="M44 24v20M52 22v22M60 24v20" stroke="#6f411b" stroke-width="3" fill="none"/><circle cx="44" cy="46" r="4" fill="#1b2a30"/><circle cx="62" cy="46" r="4" fill="#1b2a30"/><ellipse cx="53" cy="55" rx="4" ry="3" fill="#6f411b"/></svg>'}
-};
-const PLACES={forest:'കാട്',river:'പുഴ',school:'സ്കൂൾ',home:'വീട്',sky:'ആകാശം'};
-const KINDS={story:'കഥ',poem:'കവിത',drawing:'ചിത്രം'};
-const STEPS=['ഫോട്ടോ','എഴുത്ത്','രംഗങ്ങൾ','കാണുക','ബുക്ക്'];
-
-const DEMO={id:'demo',demo:true,title:'തത്തയും മാമ്പഴവും',child:'അമ്മു',kind:'story',consent:true,hasPhoto:false,created:0,
-  text:'ഒരു കാട്ടിൽ ഒരു തത്ത ഉണ്ടായിരുന്നു. ഒരു ദിവസം തത്തക്ക് നല്ല വിശപ്പായി. മാവിന്റെ മുകളിൽ ഒരു വലിയ മാമ്പഴം കണ്ടു. പക്ഷേ അത് വളരെ ഉയരത്തിലായിരുന്നു.\n\nഅപ്പോൾ ഒരു ആനക്കുട്ടി വന്നു. ആനക്കുട്ടി തുമ്പിക്കൈ കൊണ്ട് മരം കുലുക്കി. മാമ്പഴം താഴെ വീണു.\n\nതത്തയും ആനക്കുട്ടിയും മാമ്പഴം പങ്കിട്ടു തിന്നു. അവർ നല്ല കൂട്ടുകാരായി.',
-  scenes:[
-    {place:'forest',lines:[{who:'mittu',text:'എനിക്ക് നല്ല വിശപ്പായി! എന്തെങ്കിലും തിന്നാൻ കിട്ടിയെങ്കിൽ.'}]},
-    {place:'forest',lines:[{who:'mittu',text:'അതാ, മാവിന്റെ മുകളിൽ ഒരു വലിയ മാമ്പഴം!'},{who:'mittu',text:'അയ്യോ, അത് വളരെ ഉയരത്തിലാണല്ലോ.'}]},
-    {place:'river',lines:[{who:'appu',text:'എന്താ മിട്ടൂ, എന്തിനാ സങ്കടം?'},{who:'mittu',text:'ആ മാമ്പഴം എനിക്ക് എത്തുന്നില്ല.'}]},
-    {place:'forest',lines:[{who:'appu',text:'ഞാൻ തുമ്പിക്കൈ കൊണ്ട് മരം കുലുക്കാം. ഒന്ന്, രണ്ട്, മൂന്ന്!'},{who:'kunjan',text:'ഠപ്പ്! മാമ്പഴം താഴെ വീണു!'}]},
-    {place:'sky',lines:[{who:'mittu',text:'നമുക്ക് ഇത് പങ്കിട്ടു തിന്നാം.'},{who:'appu',text:'ഇനി നമ്മൾ നല്ല കൂട്ടുകാർ!'}]}
-  ]};
-
-/* ---------- cast: the four fixed characters + the teacher's own ---------- */
-const MOTIONS={fly:'പറക്കൽ',hop:'ചാട്ടം',walk:'നടത്തം',swim:'നീന്തൽ',stand:'നിൽക്കൽ'};
-const BUILTIN_MOTION={mittu:'fly',appu:'walk',meenu:'walk',kunjan:'hop'};
+/* ---------- cast (data and helpers live in cast.js) ---------- */
 let customChars=[];
-function castMap(){
-  const m={};Object.keys(CAST).forEach(k=>{m[k]=Object.assign({motion:BUILTIN_MOTION[k]||'stand'},CAST[k])});
-  customChars.forEach(c=>{m[c.id]={name:c.name,what:'ടീച്ചർ ചേർത്തത്',motion:MOTIONS[c.motion]?c.motion:'stand',custom:true,
-    svg:'<img src="'+c.img+'" alt="'+esc(c.name)+'"'+(c.mirror?' style="transform:scaleX(-1)"':'')+'>'}});
-  return m;
-}
+function castMap(){return castMapFrom(customChars)}
 function isCast(k){return !!(CAST[k]||customChars.some(c=>c.id===k))}
 function castOf(k){const m=castMap();return m[k]||m.mittu}
 
 /* ---------- storage on this device (IndexedDB, with in-memory fallback) ---------- */
 const store=(function(){
-  let dbp=null; const mem={works:new Map(),photos:new Map(),chars:new Map()};
+  let dbp=null; const mem={works:new Map(),photos:new Map(),chars:new Map(),audio:new Map()};
   function open(){
     if(dbp)return dbp;
     dbp=new Promise((res)=>{
       try{
-        const rq=indexedDB.open('kathakkoodu',2);
-        rq.onupgradeneeded=()=>{const d=rq.result;if(!d.objectStoreNames.contains('works'))d.createObjectStore('works',{keyPath:'id'});if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos');if(!d.objectStoreNames.contains('chars'))d.createObjectStore('chars',{keyPath:'id'})};
+        const rq=indexedDB.open('kathakkoodu',3);
+        rq.onupgradeneeded=()=>{const d=rq.result;if(!d.objectStoreNames.contains('works'))d.createObjectStore('works',{keyPath:'id'});if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos');if(!d.objectStoreNames.contains('chars'))d.createObjectStore('chars',{keyPath:'id'});if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio',{keyPath:'id'})};
         rq.onsuccess=()=>res(rq.result);
         rq.onerror=()=>res(null);
         rq.onblocked=()=>res(null);
@@ -74,7 +43,11 @@ const store=(function(){
     getPhoto:id=>tx('photos','readonly',st=>st?st.get(id):null).then(r=>r||mem.photos.get(id)||null),
     clist:()=>tx('chars','readonly',st=>st?st.getAll():null).then(r=>r||[...mem.chars.values()]),
     cput:c=>tx('chars','readwrite',st=>st?st.put(c):(mem.chars.set(c.id,c),null)),
-    cdel:id=>tx('chars','readwrite',st=>st?st.delete(id):(mem.chars.delete(id),null))
+    cdel:id=>tx('chars','readwrite',st=>st?st.delete(id):(mem.chars.delete(id),null)),
+    alist:()=>tx('audio','readonly',st=>st?st.getAll():null).then(r=>r||[...mem.audio.values()]),
+    aget:id=>tx('audio','readonly',st=>st?st.get(id):null).then(r=>r||mem.audio.get(id)||null),
+    aput:a=>tx('audio','readwrite',st=>st?st.put(a):(mem.audio.set(a.id,a),null)),
+    adel:id=>tx('audio','readwrite',st=>st?st.delete(id):(mem.audio.delete(id),null))
   };
 })();
 
@@ -99,8 +72,8 @@ let persistent=true;
 let sb=null, sbConfigured=false, user=null, syncing=false, pendingCount=0;
 const SB_LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 const photoPath=id=>user.id+'/'+id+'.jpg';
-function toRow(w){return {id:w.id,title:w.title,child:w.child,kind:w.kind,consent:!!w.consent,text:w.text||'',scenes:w.scenes||[],has_photo:!!w.hasPhoto,created:w.created||Date.now(),updated:w.updated||Date.now()}}
-function fromRow(r){return {id:r.id,title:r.title,child:r.child,kind:r.kind,consent:r.consent,text:r.text||'',scenes:Array.isArray(r.scenes)?r.scenes:[],hasPhoto:!!r.has_photo,created:Number(r.created)||0,updated:Number(r.updated)||0}}
+function toRow(w){return {id:w.id,title:w.title,child:w.child,kind:w.kind,consent:!!w.consent,text:w.text||'',scenes:w.scenes||[],has_photo:!!w.hasPhoto,share:w.share||null,shared_at:w.sharedAt||null,created:w.created||Date.now(),updated:w.updated||Date.now()}}
+function fromRow(r){return {id:r.id,title:r.title,child:r.child,kind:r.kind,consent:r.consent,text:r.text||'',scenes:Array.isArray(r.scenes)?r.scenes:[],hasPhoto:!!r.has_photo,share:r.share||null,sharedAt:Number(r.shared_at)||0,created:Number(r.created)||0,updated:Number(r.updated)||0}}
 function dataUrlToBlob(d){const p=d.split(','),mime=(/data:([^;]+)/.exec(p[0])||[])[1]||'image/jpeg',bin=atob(p[1]),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
 function blobToDataUrl(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)})}
 const mine=w=>user?w._owner===user.id:!w._owner;
@@ -172,6 +145,10 @@ async function sync(){
       const {error}=await sb.from('characters').upsert(toCRow(c));if(error)throw error;
       const now=(await store.clist()).find(x=>x.id===c.id);if(now&&(now.updated||0)<=(c.updated||0))await store.cput(Object.assign(now,{_dirty:false}));
     }
+    for(const a of (await store.alist()).filter(a=>a._owner===user.id&&a._dirty)){
+      const {error}=await sb.storage.from('audio').upload(user.id+'/'+a.id,a.blob,{upsert:true,contentType:(a.type||'audio/webm').split(';')[0]});if(error)throw error;
+      a._dirty=false;await store.aput(a);
+    }
     const todo=(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty));
     for(const w of todo){
       if(w._photoDirty){
@@ -189,7 +166,7 @@ async function sync(){
 }
 async function countPending(){
   const before=pendingCount;
-  pendingCount=user?(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty)).length+(await store.clist()).filter(c=>c._owner===user.id&&c._dirty).length:0;
+  pendingCount=user?(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty)).length+(await store.clist()).filter(c=>c._owner===user.id&&c._dirty).length+(await store.alist()).filter(a=>a._owner===user.id&&a._dirty).length:0;
   if(before!==pendingCount&&route()==='shelf')render();
 }
 async function guestWorks(){return (await store.list()).filter(w=>!w._owner)}
@@ -198,6 +175,7 @@ async function moveGuestWorks(){
   if(!user)return;const g=await guestWorks();
   for(const w of g){w._owner=user.id;w._dirty=true;w._photoDirty=!!w.hasPhoto;w.updated=Date.now();await store.put(w)}
   for(const c of await guestChars()){c._owner=user.id;c._dirty=true;c.updated=Date.now();await store.cput(c)}
+  for(const a of (await store.alist()).filter(a=>!a._owner)){a._owner=user.id;a._dirty=true;await store.aput(a)}
   try{await sync();toast(g.length+' സൃഷ്ടികൾ അക്കൗണ്ടിലേക്ക് മാറ്റി')}catch(e){toast('നെറ്റ് വന്നാൽ തനിയെ അപ്‌ലോഡ് ആകും',true)}
   await reloadWorks();
 }
@@ -234,12 +212,12 @@ let chain=Promise.resolve();
 function toast(msg,bad){toastEl.textContent=msg;toastEl.className=bad?'bad':'';toastEl.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>{toastEl.hidden=true},2600)}
 function route(){const h=(location.hash||'#shelf').slice(1);return ['shelf','new','work','cast','plan','login'].includes(h)?h:'shelf'}
 function go(h){if(location.hash==='#'+h)render();else location.hash=h}
-function stopPlay(){clearTimeout(play.timer);play.on=false;try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}}
+function stopPlay(){clearTimeout(play.timer);play.on=false;stopVoice();try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}}
 function doneSteps(w){return [!!w.hasPhoto,!!(w.text&&w.text.trim()),!!(w.scenes&&w.scenes.length)]}
 
 function persist(quiet){
   if(!cur||cur.demo)return;
-  const body={id:cur.id,title:cur.title,child:cur.child,kind:cur.kind,consent:!!cur.consent,text:cur.text||'',scenes:cur.scenes||[],hasPhoto:!!cur.hasPhoto,created:cur.created,updated:Date.now()};
+  const body={id:cur.id,title:cur.title,child:cur.child,kind:cur.kind,consent:!!cur.consent,text:cur.text||'',scenes:cur.scenes||[],hasPhoto:!!cur.hasPhoto,share:cur.share||null,sharedAt:cur.sharedAt||0,created:cur.created,updated:Date.now()};
   const i=works.findIndex(w=>w.id===body.id);if(i>=0)works[i]=body;else works.unshift(body);
   chain=chain.then(()=>data.put(body)).then(()=>{if(!quiet)toast('സേവ് ചെയ്തു')},()=>{if(user)toast('ഫോണിൽ സേവ് ചെയ്തു. നെറ്റ് വന്നാൽ അപ്‌ലോഡ് ആകും.');else toast('സേവ് ചെയ്യാനായില്ല',true)});
 }
@@ -353,7 +331,7 @@ function stepHTML(){
     }
     (w.scenes||[]).forEach((sc,i)=>{
       h+='<div class="page scene"><div class="row between"><h3>രംഗം '+(i+1)+'</h3><span class="row"><select data-f="place" data-s="'+i+'" aria-label="സ്ഥലം" style="width:auto">'+Object.keys(PLACES).map(k=>'<option value="'+k+'"'+(k===sc.place?' selected':'')+'>'+PLACES[k]+'</option>').join('')+'</select><button class="x" data-act="delScene" data-s="'+i+'" aria-label="രംഗം കളയുക">×</button></span></div>';
-      sc.lines.forEach((ln,j)=>{h+='<div class="line">'+castSel(ln.who,i,j)+'<textarea id="ln-'+i+'-'+j+'" data-f="line" data-s="'+i+'" data-l="'+j+'" aria-label="സംഭാഷണം">'+esc(ln.text)+'</textarea>'+micBtn('ln-'+i+'-'+j,false)+'<button class="x" data-act="delLine" data-s="'+i+'" data-l="'+j+'" aria-label="വരി കളയുക">×</button></div>'});
+      sc.lines.forEach((ln,j)=>{h+='<div class="line">'+castSel(ln.who,i,j)+'<textarea id="ln-'+i+'-'+j+'" data-f="line" data-s="'+i+'" data-l="'+j+'" aria-label="സംഭാഷണം">'+esc(ln.text)+'</textarea>'+micBtn('ln-'+i+'-'+j,false)+'<button class="x" data-act="delLine" data-s="'+i+'" data-l="'+j+'" aria-label="വരി കളയുക">×</button>'+voiceTools(i,j,ln)+'</div>'});
       h+='<div class="row"><button class="btn ghost" data-act="addLine" data-s="'+i+'">വരി ചേർക്കുക</button></div></div>';
     });
     h+='<div class="row"><button class="btn ghost" data-act="addScene">ഒരു രംഗം ചേർക്കുക</button>'+((w.scenes&&w.scenes.length)?'<button class="btn" data-act="step" data-n="3">വീഡിയോ ആയി കാണുക</button>':'')+'</div></div>';
@@ -361,24 +339,12 @@ function stepHTML(){
   }
   if(step===3){
     if(!(w.scenes&&w.scenes.length)) return '<p class="note">കാണാൻ രംഗങ്ങൾ വേണം. "രംഗങ്ങൾ" ഘട്ടത്തിൽ അവ ഉണ്ടാക്കുക.</p>';
-    return '<div class="form"><div id="stageBox"></div><div class="row" style="justify-content:center"><button class="btn ghost" data-act="prev">മുമ്പത്തേത്</button><button class="btn" data-act="play" id="playBtn">പ്ലേ</button><button class="btn ghost" data-act="next">അടുത്തത്</button></div><div class="dots" id="dots"></div><p class="muted small" style="text-align:center">ഇപ്പോൾ ആപ്പിനുള്ളിൽ കാണാം. കുട്ടിയുടെ ശബ്ദവും MP4 ഡൗൺലോഡും അടുത്ത പതിപ്പിലാണ്.</p></div>';
+    return '<div class="form"><div id="stageBox"></div><div class="row" style="justify-content:center"><button class="btn ghost" data-act="prev">മുമ്പത്തേത്</button><button class="btn" data-act="play" id="playBtn">പ്ലേ</button><button class="btn ghost" data-act="next">അടുത്തത്</button></div><div class="dots" id="dots"></div><p class="muted small" style="text-align:center">'+((w.scenes||[]).some(sc=>sc.lines.some(l=>l.aud))?'പ്ലേ അമർത്തിയാൽ കുട്ടിയുടെ ശബ്ദത്തിൽ കേൾക്കാം.':'"രംഗങ്ങൾ" ഘട്ടത്തിൽ ഓരോ വരിയും കുട്ടിയുടെ ശബ്ദത്തിൽ റെക്കോർഡ് ചെയ്യാം.')+'</p></div>'+sharePanel();
   }
   const pages=bookPages(); bookPage=Math.min(bookPage,pages.length-1);
-  return '<div class="form">'+pages[bookPage]+'<div class="row between"><button class="btn ghost" data-act="bprev"'+(bookPage===0?' disabled':'')+'>മുൻ പേജ്</button><span class="muted small" style="font-variant-numeric:tabular-nums">'+(bookPage+1)+' / '+pages.length+'</span><button class="btn ghost" data-act="bnext"'+(bookPage>=pages.length-1?' disabled':'')+'>അടുത്ത പേജ്</button></div></div>';
+  return '<div class="form">'+pages[bookPage]+'<div class="row between"><button class="btn ghost" data-act="bprev"'+(bookPage===0?' disabled':'')+'>മുൻ പേജ്</button><span class="muted small" style="font-variant-numeric:tabular-nums">'+(bookPage+1)+' / '+pages.length+'</span><button class="btn ghost" data-act="bnext"'+(bookPage>=pages.length-1?' disabled':'')+'>അടുത്ത പേജ്</button></div></div>'+sharePanel();
 }
-function bookPages(){
-  const w=cur, p=[];
-  p.push('<div class="book cover"><p>'+esc(KINDS[w.kind]||'കഥ')+'</p><h2>'+esc(w.title)+'</h2><p>എഴുതിയത്: '+esc(w.child)+'</p><p class="small">ക്ലാസ് 4</p></div>');
-  if(w.photo) p.push('<div class="book"><p class="muted small">കുട്ടിയുടെ സ്വന്തം കൈയക്ഷരത്തിൽ</p><img alt="സൃഷ്ടിയുടെ ഫോട്ടോ" src="'+w.photo+'"></div>');
-  const paras=(w.text||'').split(/\n\s*\n/).map(s=>s.trim()).filter(Boolean);
-  if(!paras.length) p.push('<div class="book"><p class="muted">എഴുത്ത് ചേർത്താൽ ഇവിടെ പേജുകളായി കാണാം.</p></div>');
-  paras.forEach((t,i)=>{
-    const sc=(w.scenes||[])[Math.min(i,(w.scenes||[]).length-1)];
-    const who=sc&&sc.lines[0]?castOf(sc.lines[0].who):null;
-    p.push('<div class="book">'+(sc?'<div class="stage '+esc(sc.place)+'" style="aspect-ratio:16/8;flex:none">'+(who?'<div class="actor m-still" style="width:22%"><div class="body">'+who.svg+'</div></div>':'')+'</div>':'')+'<div class="ruled">'+esc(t)+'</div></div>');
-  });
-  return p;
-}
+function bookPages(){return bookPagesFor(cur,castOf,cur.photo)}
 function workView(){
   if(!cur){return shelfView()}
   return '<div class="row between"><a class="btn ghost" href="#shelf" style="text-decoration:none">← ഷെൽഫ്</a>'+(cur.demo?'<span class="chip demo">ഉദാഹരണം, സേവ് ആകില്ല</span>':
@@ -470,20 +436,20 @@ function planView(){
 }
 
 function render(){
-  stopPlay();micStop();drawStage.last=null;
+  stopPlay();micStop();if(recState)recStop();drawStage.last=null;
   const r=route();
   if(r==='work'&&!cur){location.hash='shelf';return}
   app.innerHTML=r==='shelf'?shelfView():r==='new'?newView():r==='work'?workView():r==='cast'?castView():r==='login'?loginView():planView();
   document.querySelectorAll('nav.tabs a').forEach(a=>{const on=a.dataset.tab===r||((r==='work'||r==='login')&&a.dataset.tab==='shelf');if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
   if(r==='work'&&step===3)drawStage();
   if(r==='work')loadPhoto();
+  if(r==='work')drawQR();
 }
-function renderStep(){stopPlay();micStop();const b=document.getElementById('stepBox');if(!b){render();return}
+function renderStep(){stopPlay();micStop();if(recState)recStop();const b=document.getElementById('stepBox');if(!b){render();return}
   document.querySelectorAll('.stepper button').forEach((x,i)=>x.setAttribute('aria-current',String(i===step)));
-  b.innerHTML=stepHTML();if(step===3)drawStage();loadPhoto()}
+  b.innerHTML=stepHTML();if(step===3)drawStage();loadPhoto();drawQR()}
 
 /* ---------- player ---------- */
-function actorHTML(c,enter){return '<div class="actor m-'+c.motion+(enter?' enter':'')+'"><div class="body">'+c.svg+'</div></div>'}
 function drawStage(){
   const box=document.getElementById('stageBox');if(!box||!cur)return;
   const sc=cur.scenes[play.s]||cur.scenes[0];if(!sc)return;
@@ -504,10 +470,20 @@ function advance(dir){
   play.s=s;play.l=l;drawStage();return true;
 }
 function tick(){
-  clearTimeout(play.timer);if(!play.on)return;
+  clearTimeout(play.timer);stopVoice();if(!play.on)return;
   const ln=(cur.scenes[play.s]||{lines:[]}).lines[play.l];
   const ms=Math.max(2600,((ln&&ln.text)||'').length*95);
-  play.timer=setTimeout(()=>{if(advance(1))tick()},ms);
+  const next=()=>{if(advance(1))tick()}, wait=()=>{play.timer=setTimeout(next,ms)};
+  if(!(ln&&ln.aud))return wait();
+  // the child's own voice: move on when it finishes
+  const at=play.s+'|'+play.l;
+  audioData.get(ln.aud).then(blob=>{
+    if(!play.on||at!==play.s+'|'+play.l)return;
+    if(!blob)return wait();
+    voiceEl=new Audio(URL.createObjectURL(blob));
+    voiceEl.onended=()=>{play.timer=setTimeout(next,600)};
+    voiceEl.play().catch(wait);
+  },wait);
 }
 
 /* ---------- photo ---------- */
@@ -613,7 +589,7 @@ function autoScenes(text,kind){
 function applyAuto(){
   const sc=autoScenes(cur.text,cur.kind);
   if(!sc.length){toast('ആദ്യം കഥ ചേർക്കുക',true);return}
-  cur.scenes=sc;play.s=0;play.l=0;persist(true);renderStep();toast('രംഗങ്ങൾ ഒരുക്കി. ഇനി തിരുത്താം.');
+  dropAudios(cur.scenes);cur.scenes=sc;play.s=0;play.l=0;persist(true);renderStep();toast('രംഗങ്ങൾ ഒരുക്കി. ഇനി തിരുത്താം.');
 }
 
 /* ---------- voice typing (browser speech recognition, free) ---------- */
@@ -659,15 +635,177 @@ function micStart(id){
   micUI();
 }
 
+/* ---------- the child's voice (MediaRecorder, free) ---------- */
+const canRecord=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
+let recState=null, voiceEl=null;
+function stopVoice(){if(voiceEl){voiceEl.onended=null;try{voiceEl.pause();URL.revokeObjectURL(voiceEl.src)}catch(e){}voiceEl=null}}
+function voiceTools(i,j,ln){
+  if(!canRecord&&!ln.aud)return '';
+  const on=recState&&recState.key===i+'|'+j;
+  return '<div class="voice">'+(canRecord?'<button type="button" class="btn ghost rec'+(on?' on':'')+'" data-act="rec" data-s="'+i+'" data-l="'+j+'">'+(on?'■ നിർത്തുക':(ln.aud?'● വീണ്ടും റെക്കോർഡ്':'● കുട്ടിയുടെ ശബ്ദം'))+'</button>':'')+
+    (ln.aud&&!on?'<button type="button" class="btn ghost" data-act="hear" data-s="'+i+'" data-l="'+j+'">▶ കേൾക്കുക</button><button type="button" class="x" data-act="unrec" data-s="'+i+'" data-l="'+j+'" aria-label="ശബ്ദം കളയുക">×</button>':'')+'</div>';
+}
+const audioExt=t=>/mp4|aac|m4a/.test(t||'')?'m4a':/ogg/.test(t||'')?'ogg':'webm';
+const audioData={
+  async get(id){
+    const r=await store.aget(id);if(r&&r.blob)return r.blob;
+    if(!user||!sb)return null;
+    const {data:blob,error}=await sb.storage.from('audio').download(user.id+'/'+id);
+    if(error||!blob)return null;
+    await store.aput({id,blob,type:blob.type,_owner:user.id,_dirty:false});return blob;
+  },
+  async put(id,blob){await store.aput({id,blob,type:blob.type,_owner:user?user.id:undefined,_dirty:!!user});if(user)sync().catch(()=>{})},
+  async del(id){await store.adel(id);if(user&&sb){try{await sb.storage.from('audio').remove([user.id+'/'+id])}catch(e){}}}
+};
+async function recStart(i,j){
+  if(recState)await recStop();
+  stopVoice();
+  const line=cur.scenes[i]&&cur.scenes[i].lines[j];if(!line)return;
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})}
+  catch(e){toast('മൈക്കിന് അനുമതി വേണം. ബ്രൗസറിന്റെ സെറ്റിംഗ്സിൽ അനുവദിക്കുക.',true);return}
+  const type=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus','audio/webm'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
+  let mr;try{mr=new MediaRecorder(stream,type?{mimeType:type,audioBitsPerSecond:48000}:undefined)}catch(e){stream.getTracks().forEach(t=>t.stop());toast('ഈ ഫോണിൽ റെക്കോർഡ് ചെയ്യാനാവില്ല.',true);return}
+  const st={key:i+'|'+j,mr,stream,chunks:[],line,work:cur,started:Date.now()};
+  mr.ondataavailable=e=>{if(e.data&&e.data.size)st.chunks.push(e.data)};
+  st.done=new Promise(res=>{mr.onstop=res});
+  st.timer=setInterval(()=>{const b=document.querySelector('[data-act=rec].on');const sec=Math.round((Date.now()-st.started)/1000);
+    if(b)b.textContent='■ നിർത്തുക ('+sec+')';if(sec>=30)recStop()},500);
+  recState=st;mr.start();
+  const b=document.querySelector('[data-act=rec][data-s="'+i+'"][data-l="'+j+'"]');if(b){b.classList.add('on');b.textContent='■ നിർത്തുക (0)'}
+}
+async function recStop(){
+  const st=recState;if(!st)return;recState=null;clearInterval(st.timer);
+  try{if(st.mr.state!=='inactive')st.mr.stop()}catch(e){}
+  await st.done;st.stream.getTracks().forEach(t=>t.stop());
+  if(!st.chunks.length||Date.now()-st.started<500){if(cur===st.work&&route()==='work'&&step===2)renderStep();return}
+  const blob=new Blob(st.chunks,{type:st.mr.mimeType||st.chunks[0].type||'audio/webm'});
+  const id='a_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)+'.'+audioExt(blob.type);
+  await audioData.put(id,blob);
+  const old=st.line.aud;st.line.aud=id;
+  if(cur===st.work)persist(true);
+  if(old)audioData.del(old);
+  toast('ശബ്ദം സേവ് ചെയ്തു');
+  if(cur===st.work&&route()==='work'&&step===2)renderStep();
+}
+async function hear(i,j){
+  stopVoice();const ln=cur.scenes[i]&&cur.scenes[i].lines[j];if(!ln||!ln.aud)return;
+  const blob=await audioData.get(ln.aud);if(!blob){toast('ശബ്ദം കണ്ടെത്താനായില്ല. നെറ്റ് നോക്കുക.',true);return}
+  voiceEl=new Audio(URL.createObjectURL(blob));voiceEl.play().catch(()=>toast('പ്ലേ ചെയ്യാനായില്ല',true));
+}
+function dropAudios(scenes){(scenes||[]).forEach(sc=>sc.lines.forEach(l=>{if(l.aud)audioData.del(l.aud)}))}
+
+/* ---------- PDF book ---------- */
+let pdfState={busy:false,blob:null,url:'',for:null};
+function pdfButtons(w){
+  if(pdfState.busy)return '<button class="btn" disabled>PDF ഒരുക്കുന്നു…</button>';
+  if(pdfState.blob&&pdfState.for===w.id){
+    const canShareFile=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([pdfState.blob],'a.pdf',{type:'application/pdf'})]}))}catch(e){return false}})();
+    return '<a class="btn" href="'+pdfState.url+'" download="'+esc(KKPdf.fileName(w))+'" style="text-decoration:none">PDF സേവ് ചെയ്യുക</a>'+
+      (canShareFile?'<button class="btn ghost" data-act="pdfShare">WhatsApp / മറ്റുള്ളവ വഴി അയക്കുക</button>':'');
+  }
+  return '<button class="btn" data-act="pdf">PDF പുസ്തകം ഉണ്ടാക്കുക</button>';
+}
+async function makePdf(){
+  if(pdfState.busy||!cur)return;const w=cur;
+  pdfState={busy:true,blob:null,url:'',for:w.id};renderStep();
+  try{
+    let photo=w.photo;if(!photo&&w.hasPhoto&&!w.demo)photo=await data.getPhoto(w.id);
+    const blob=await KKPdf.make(w,castOf,photo);
+    pdfState={busy:false,blob,url:URL.createObjectURL(blob),for:w.id};
+    // start the download straight away; the buttons stay for a second try or sharing
+    const a=document.createElement('a');a.href=pdfState.url;a.download=KKPdf.fileName(w);document.body.appendChild(a);a.click();a.remove();
+  }catch(e){pdfState={busy:false,blob:null,url:'',for:null};toast('PDF ഉണ്ടാക്കാനായില്ല'+(e&&e.message==='lib'?' (നെറ്റ് വേണം)':''),true)}
+  if(cur===w&&route()==='work')renderStep();
+}
+async function sharePdf(){
+  if(!pdfState.blob||!cur)return;
+  const f=new File([pdfState.blob],KKPdf.fileName(cur),{type:'application/pdf'});
+  try{await navigator.share({files:[f],title:cur.title,text:cur.title+' — '+cur.child})}catch(e){}
+}
+
+/* ---------- parents' link + QR (a public copy in the "shared" bucket) ---------- */
+let shareBusy=false, confirmUnshare=false;
+function shareURL(w){return location.origin+'/view#'+w.share}
+function sharePanel(){
+  const w=cur;if(!w||w.demo)return '';
+  let h='<div class="plain form"><h3>പങ്കിടുക</h3><div class="row">'+pdfButtons(w)+'</div>'+
+    '<p class="muted small">കവർ, കുട്ടിയുടെ കൈയക്ഷരം, ഓരോ ഭാഗവും ചിത്രത്തോടെ — A5 പുസ്തകം. പ്രിന്റ് ചെയ്യാനും അയക്കാനും.</p>';
+  h+='<h3>രക്ഷിതാക്കൾക്ക് QR കോഡ്</h3>';
+  if(!sbConfigured||!sb) return h+'<p class="muted small">ഇതിന് ക്ലൗഡ് സേവ് (Supabase) സജ്ജമാക്കണം.</p></div>';
+  if(!user) return h+'<p class="muted small">ലോഗിൻ ചെയ്താൽ രക്ഷിതാക്കൾക്ക് ഫോണിൽ കാണാനുള്ള ലിങ്കും QR കോഡും ഉണ്ടാക്കാം. <a href="#login">ലോഗിൻ</a></p></div>';
+  if(!w.share){
+    return h+'<p class="small">രക്ഷിതാക്കൾക്ക് ലോഗിൻ ഇല്ലാതെ ഫോണിൽ ഈ കഥ വീഡിയോ ആയും പുസ്തകമായും കാണാം. ലിങ്ക് കിട്ടുന്ന ആർക്കും കാണാനാവും എന്ന് ഓർക്കുക; എപ്പോൾ വേണമെങ്കിലും നിർത്താം.</p>'+
+      '<div class="row"><button class="btn" data-act="share"'+(shareBusy?' disabled':'')+'>'+(shareBusy?'ഒരുക്കുന്നു…':'ലിങ്കും QR കോഡും ഉണ്ടാക്കുക')+'</button></div></div>';
+  }
+  const url=shareURL(w), stale=(w.updated||0)>(w.sharedAt||0)+2000;
+  h+='<div class="center qrwrap"><div id="qrBox" aria-label="QR കോഡ്"></div><div class="linkbox">'+esc(url)+'</div></div>'+
+    '<div class="row"><button class="btn ghost" data-act="copyLink">ലിങ്ക് കോപ്പി ചെയ്യുക</button>'+
+    '<a class="btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent(w.child+' എഴുതിയ "'+w.title+'" കാണാം: '+url)+'">WhatsApp</a></div>'+
+    (stale?'<p class="small" style="color:var(--warn)">പങ്കിട്ട ശേഷം മാറ്റങ്ങൾ വരുത്തിയിട്ടുണ്ട്. രക്ഷിതാക്കൾ പുതിയത് കാണാൻ "പുതുക്കുക" അമർത്തുക.</p>':'')+
+    '<div class="row"><button class="btn'+(stale?'':' ghost')+'" data-act="share"'+(shareBusy?' disabled':'')+'>'+(shareBusy?'പുതുക്കുന്നു…':'പുതുക്കുക')+'</button>'+
+    (confirmUnshare?'<button class="btn danger" data-act="unshareYes">ഉറപ്പായും നിർത്തുക</button><button class="btn ghost" data-act="unshareNo">വേണ്ട</button>':'<button class="btn ghost" data-act="unshare">പങ്കിടൽ നിർത്തുക</button>')+'</div>';
+  return h+'</div>';
+}
+function loadQRLib(){return window.QRCode?Promise.resolve():new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s)})}
+function drawQR(){
+  const box=document.getElementById('qrBox');if(!box||!cur||!cur.share)return;
+  const url=shareURL(cur);
+  loadQRLib().then(()=>{box.innerHTML='';new QRCode(box,{text:url,width:360,height:360,correctLevel:QRCode.CorrectLevel.M})},()=>{box.textContent='QR കോഡിന് നെറ്റ് വേണം'});
+}
+function randomToken(){const a=new Uint8Array(16);crypto.getRandomValues(a);return [...a].map(b=>b.toString(16).padStart(2,'0')).join('')}
+async function clearShared(base,keep){
+  const b=sb.storage.from('shared'),gone=[];
+  const top=await b.list(base);(top.data||[]).forEach(f=>{if(f.id&&!keep.has(f.name))gone.push(base+'/'+f.name)});
+  const aud=await b.list(base+'/a');(aud.data||[]).forEach(f=>{if(f.id&&!keep.has('a/'+f.name))gone.push(base+'/a/'+f.name)});
+  if(gone.length){const {error}=await b.remove(gone);if(error)throw error}
+}
+async function doShare(){
+  if(shareBusy||!cur||!user||!sb)return;const w=cur;shareBusy=true;renderStep();
+  try{
+    const base=w.share||(user.id+'/'+randomToken()),b=sb.storage.from('shared'),keep=new Set(['bundle.json']);
+    const up=async(path,blob,type)=>{const {error}=await b.upload(base+'/'+path,blob,{upsert:true,contentType:type,cacheControl:'60'});if(error)throw error;keep.add(path)};
+    let photo=null;
+    if(w.hasPhoto){const d=w.photo||await data.getPhoto(w.id);if(d){await up('photo.jpg',dataUrlToBlob(d),'image/jpeg');photo='photo.jpg'}}
+    const audio=[];
+    for(const sc of w.scenes||[])for(const l of sc.lines)if(l.aud&&!keep.has('a/'+l.aud)){const blob=await audioData.get(l.aud);if(blob){await up('a/'+l.aud,blob,(blob.type||'audio/webm').split(';')[0]);audio.push(l.aud)}}
+    const used=new Set();(w.scenes||[]).forEach(sc=>sc.lines.forEach(l=>used.add(l.who)));
+    const chars=customChars.filter(c=>used.has(c.id)).map(c=>({id:c.id,name:c.name,motion:c.motion,mirror:!!c.mirror,img:c.img}));
+    const bundle={v:1,title:w.title,child:w.child,kind:w.kind,text:w.text||'',scenes:(w.scenes||[]).map(sc=>({place:sc.place,lines:sc.lines.map(l=>({who:l.who,text:l.text,aud:audio.includes(l.aud)?l.aud:undefined}))})),chars,photo,shared:Date.now()};
+    await up('bundle.json',new Blob([JSON.stringify(bundle)],{type:'application/json'}),'application/json');
+    await clearShared(base,keep).catch(()=>{});
+    w.share=base;w.sharedAt=Date.now()+1500;
+    if(cur===w)persist(true);
+    toast('ലിങ്ക് തയ്യാർ. QR കോഡ് രക്ഷിതാക്കൾക്ക് കാണിക്കാം.');
+  }catch(e){toast('പങ്കിടാനായില്ല. നെറ്റ് നോക്കുക.',true)}
+  shareBusy=false;if(cur===w&&route()==='work')renderStep();
+}
+async function doUnshare(){
+  if(!cur||!cur.share||!sb)return;const w=cur;confirmUnshare=false;
+  try{await clearShared(w.share,new Set());await sb.storage.from('shared').remove([w.share+'/bundle.json']);w.share=null;w.sharedAt=0;persist(true);toast('പങ്കിടൽ നിർത്തി. പഴയ ലിങ്ക് ഇനി തുറക്കില്ല.')}
+  catch(e){toast('നിർത്താനായില്ല. നെറ്റ് നോക്കുക.',true)}
+  if(cur===w&&route()==='work')renderStep();
+}
+
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act, s=+t.dataset.s, l=+t.dataset.l;
   if(a==='open'){const id=t.dataset.id;const src=id==='demo'?DEMO:works.find(w=>w.id===id);if(!src)return;
-    cur=JSON.parse(JSON.stringify(src));step=doneSteps(cur)[2]?3:doneSteps(cur)[1]?2:doneSteps(cur)[0]?1:0;if(cur.demo)step=3;play.s=0;play.l=0;bookPage=0;confirmDel=false;go('work')}
+    pdfState={busy:false,blob:null,url:'',for:null};confirmUnshare=false;cur=JSON.parse(JSON.stringify(src));step=doneSteps(cur)[2]?3:doneSteps(cur)[1]?2:doneSteps(cur)[0]?1:0;if(cur.demo)step=3;play.s=0;play.l=0;bookPage=0;confirmDel=false;go('work')}
   else if(a==='step'){step=+t.dataset.n;confirmRedo=false;renderStep();window.scrollTo(0,0)}
   else if(a==='ocr')doOcr();
   else if(a==='scenes')doScenes();
   else if(a==='logout')doLogout();
+  else if(a==='rec'){const k=s+'|'+l;if(recState&&recState.key===k)recStop();else recStart(s,l)}
+  else if(a==='hear')hear(s,l);
+  else if(a==='unrec'){const ln=cur.scenes[s].lines[l];if(ln.aud){audioData.del(ln.aud);delete ln.aud;persist(true);renderStep()}}
+  else if(a==='pdf')makePdf();
+  else if(a==='pdfShare')sharePdf();
+  else if(a==='share')doShare();
+  else if(a==='unshare'){confirmUnshare=true;renderStep()}
+  else if(a==='unshareNo'){confirmUnshare=false;renderStep()}
+  else if(a==='unshareYes')doUnshare();
+  else if(a==='copyLink'){const u=shareURL(cur);(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('ലിങ്ക് കോപ്പി ചെയ്തു'),()=>toast(u))}
   else if(a==='replay')drawPreview();
   else if(a==='charDel'){confirmChar=t.dataset.id;render()}
   else if(a==='charDelNo'){confirmChar=null;render()}
@@ -683,10 +821,10 @@ document.addEventListener('click',e=>{
   else if(a==='clearCode'){setCode('');render();toast('കോഡ് മാറ്റി. അടുത്ത തവണ വീണ്ടും ചോദിക്കും.')}
   else if(a==='install'){if(installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;render()})}}
   else if(a==='addScene'){cur.scenes=cur.scenes||[];if(cur.scenes.length<8){cur.scenes.push({place:'forest',lines:[{who:'mittu',text:''}]});persist(true);renderStep()}}
-  else if(a==='delScene'){cur.scenes.splice(s,1);persist();renderStep()}
+  else if(a==='delScene'){dropAudios(cur.scenes.splice(s,1));persist();renderStep()}
   else if(a==='addLine'){if(cur.scenes[s].lines.length<4){cur.scenes[s].lines.push({who:'mittu',text:''});persist(true);renderStep()}}
-  else if(a==='delLine'){cur.scenes[s].lines.splice(l,1);if(!cur.scenes[s].lines.length)cur.scenes.splice(s,1);persist();renderStep()}
-  else if(a==='play'){play.on=!play.on;drawStage();if(play.on)tick();else clearTimeout(play.timer)}
+  else if(a==='delLine'){const gone=cur.scenes[s].lines.splice(l,1);gone.forEach(x=>{if(x.aud)audioData.del(x.aud)});if(!cur.scenes[s].lines.length)cur.scenes.splice(s,1);persist();renderStep()}
+  else if(a==='play'){play.on=!play.on;drawStage();if(play.on)tick();else{clearTimeout(play.timer);stopVoice()}}
   else if(a==='next'){advance(1);if(play.on)tick()}
   else if(a==='prev'){advance(-1);if(play.on)tick()}
   else if(a==='bnext'){bookPage++;renderStep()}
@@ -772,6 +910,7 @@ async function doLogout(){
   // remove this teacher's copies from the device so the next person on this phone can't see them
   const uid=user.id;for(const w of (await store.list()).filter(x=>x._owner===uid))await store.del(w.id);
   for(const c of (await store.clist()).filter(x=>x._owner===uid))await store.cdel(c.id);
+  for(const a of (await store.alist()).filter(x=>x._owner===uid))await store.adel(a.id);
   await sb.auth.signOut();user=null;cur=null;works=[];await reloadWorks();toast('ലോഗൗട്ട് ചെയ്തു');go('shelf');
 }
 window.addEventListener('hashchange',render);

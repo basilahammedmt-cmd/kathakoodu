@@ -61,3 +61,29 @@ alter table public.characters enable row level security;
 drop policy if exists "own characters: all" on public.characters;
 create policy "own characters: all" on public.characters for all to authenticated
   using (owner = auth.uid()) with check (owner = auth.uid());
+
+-- 4. Sharing with parents: a link/QR per work.
+alter table public.works add column if not exists share text;
+alter table public.works add column if not exists shared_at bigint;
+
+-- 5. The child's recorded voice (private, like photos). Files: <teacher id>/<audio id>
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('audio', 'audio', false, 3145728, array['audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/aac','audio/x-m4a'])
+on conflict (id) do update set public = false, file_size_limit = 3145728, allowed_mime_types = array['audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/aac','audio/x-m4a'];
+
+drop policy if exists "own audio: all" on storage.objects;
+create policy "own audio: all" on storage.objects for all to authenticated
+  using (bucket_id = 'audio' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'audio' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- 6. Copies the teacher chose to share. PUBLIC bucket: anyone with the exact link can read a file,
+--    but nobody can list the bucket, and only the owner can add, change or delete.
+--    Files: <teacher id>/<random 32-character token>/bundle.json, photo.jpg, a/<audio>
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('shared', 'shared', true, 3145728, array['application/json','image/jpeg','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/aac','audio/x-m4a'])
+on conflict (id) do update set public = true, file_size_limit = 3145728, allowed_mime_types = array['application/json','image/jpeg','audio/webm','audio/mp4','audio/ogg','audio/mpeg','audio/aac','audio/x-m4a'];
+
+drop policy if exists "own shared: all" on storage.objects;
+create policy "own shared: all" on storage.objects for all to authenticated
+  using (bucket_id = 'shared' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'shared' and (storage.foldername(name))[1] = auth.uid()::text);

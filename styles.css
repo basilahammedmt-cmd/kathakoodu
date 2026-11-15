@@ -187,3 +187,15 @@ details.tips ul{margin-top:8px}
 @media (prefers-reduced-motion:reduce){.actor,.actor .body{animation:none!important}}
 .mini.stage{aspect-ratio:1/1;width:100%;max-width:140px}
 .mini.stage .actor{left:10%;width:80%;bottom:6%;height:80%}
+
+/* child's voice under each scene line */
+.line .voice{grid-column:2 / -1;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.voice .btn{padding:5px 12px;font-size:.9rem}
+.btn.rec.on{color:var(--bad);border-color:var(--bad);animation:pulse 1.2s ease-in-out infinite}
+@media (max-width:420px){.line .voice{grid-column:1 / -1}}
+/* share panel */
+.qrwrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+#qrBox{background:#fff;padding:12px;border-radius:10px;line-height:0}
+#qrBox img,#qrBox canvas{width:200px;height:200px}
+.linkbox{font-family:monospace;font-size:.85rem;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;word-break:break-all;max-width:100%}
+.center{text-align:center}
