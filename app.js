@@ -75,11 +75,121 @@ async function api(path,body){
 }
 
 let persistent=true;
+
+/* ---------- cloud (Supabase) + data layer ----------
+   Not logged in: works stay on this device only.
+   Logged in: every change is written on the device first (so nothing is lost without internet),
+   marked _dirty, then sent to Supabase. Anything still _dirty is sent again when the net comes back. */
+let sb=null, sbConfigured=false, user=null, syncing=false, pendingCount=0;
+const SB_LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const photoPath=id=>user.id+'/'+id+'.jpg';
+function toRow(w){return {id:w.id,title:w.title,child:w.child,kind:w.kind,consent:!!w.consent,text:w.text||'',scenes:w.scenes||[],has_photo:!!w.hasPhoto,created:w.created||Date.now(),updated:w.updated||Date.now()}}
+function fromRow(r){return {id:r.id,title:r.title,child:r.child,kind:r.kind,consent:r.consent,text:r.text||'',scenes:Array.isArray(r.scenes)?r.scenes:[],hasPhoto:!!r.has_photo,created:Number(r.created)||0,updated:Number(r.updated)||0}}
+function dataUrlToBlob(d){const p=d.split(','),mime=(/data:([^;]+)/.exec(p[0])||[])[1]||'image/jpeg',bin=atob(p[1]),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
+function blobToDataUrl(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)})}
+const mine=w=>user?w._owner===user.id:!w._owner;
+const clean0=w=>{const o={};for(const k in w)if(k[0]!=='_')o[k]=w[k];return o};
+
+const data={
+  async list(){
+    const local=(await store.list()).filter(mine);
+    if(!user)return local;
+    try{
+      const {data:rows,error}=await sb.from('works').select('*').order('created',{ascending:false});
+      if(error)throw error;
+      const byId=new Map(rows.map(r=>[r.id,fromRow(r)]));
+      // keep local edits that have not reached the cloud yet
+      local.forEach(w=>{if(w._dirty&&(!byId.has(w.id)||(w.updated||0)>=(byId.get(w.id).updated||0)))byId.set(w.id,clean0(w))});
+      // refresh the device copy; drop device copies deleted elsewhere
+      const cloudIds=new Set(rows.map(r=>r.id));
+      for(const w of local){if(!w._dirty&&!cloudIds.has(w.id))await store.del(w.id)}
+      for(const r of rows){const lw=local.find(x=>x.id===r.id);if(!lw||!lw._dirty)await store.put(Object.assign(fromRow(r),{_owner:user.id,_photoDirty:lw&&lw._photoDirty}))}
+      return [...byId.values()];
+    }catch(e){return local.map(clean0)}
+  },
+  async put(w){
+    const prev=(await store.list()).find(x=>x.id===w.id)||{};
+    await store.put(Object.assign({},w,{_owner:user?user.id:undefined,_dirty:!!user,_photoDirty:prev._photoDirty}));
+    if(user)return sync();
+  },
+  async del(id){
+    await store.del(id);
+    if(user){
+      const {error}=await sb.from('works').delete().eq('id',id);if(error)throw error;
+      await sb.storage.from('photos').remove([photoPath(id)]);
+    }
+  },
+  async putPhoto(id,d){
+    await store.putPhoto(id,d);
+    if(user){const all=await store.list();const w=all.find(x=>x.id===id);if(w){w._photoDirty=true;await store.put(w)}return sync()}
+  },
+  async getPhoto(id){
+    const d=await store.getPhoto(id);if(d||!user)return d;
+    const {data:blob,error}=await sb.storage.from('photos').download(photoPath(id));
+    if(error||!blob)return null;
+    const url=await blobToDataUrl(blob);await store.putPhoto(id,url);return url;
+  }
+};
+async function sync(){
+  if(!user||syncing)return;syncing=true;
+  try{
+    const todo=(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty));
+    for(const w of todo){
+      if(w._photoDirty){
+        const d=await store.getPhoto(w.id);
+        if(d){const {error}=await sb.storage.from('photos').upload(photoPath(w.id),dataUrlToBlob(d),{upsert:true,contentType:'image/jpeg'});if(error)throw error}
+        w._photoDirty=false;
+      }
+      if(w._dirty){const {error}=await sb.from('works').upsert(toRow(w));if(error)throw error;w._dirty=false}
+      // only clear the flags if nothing newer was saved meanwhile
+      const now=(await store.list()).find(x=>x.id===w.id);
+      if(now&&(now.updated||0)<=(w.updated||0))await store.put(Object.assign(now,{_dirty:w._dirty&&now._dirty,_photoDirty:now._photoDirty&&w._photoDirty}));
+    }
+  }catch(e){syncing=false;await countPending();throw e}
+  syncing=false;await countPending();
+}
+async function countPending(){
+  const before=pendingCount;
+  pendingCount=user?(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty)).length:0;
+  if(before!==pendingCount&&route()==='shelf')render();
+}
+async function guestWorks(){return (await store.list()).filter(w=>!w._owner)}
+async function moveGuestWorks(){
+  if(!user)return;const g=await guestWorks();
+  for(const w of g){w._owner=user.id;w._dirty=true;w._photoDirty=!!w.hasPhoto;w.updated=Date.now();await store.put(w)}
+  try{await sync();toast(g.length+' സൃഷ്ടികൾ അക്കൗണ്ടിലേക്ക് മാറ്റി')}catch(e){toast('നെറ്റ് വന്നാൽ തനിയെ അപ്‌ലോഡ് ആകും',true)}
+  await reloadWorks();
+}
+async function reloadWorks(){
+  try{works=(await data.list()).sort((a,b)=>(b.created||0)-(a.created||0))}catch(e){}
+  guestCount=user?(await guestWorks()).length:0;
+  await countPending();
+  if(route()==='shelf')render();
+}
+let guestCount=0, authMsg='', authBusy=false, recovering=false, authEmail='';
+async function initCloud(cfg){
+  if(!cfg.supabaseUrl||!cfg.supabaseKey)return;
+  sbConfigured=true;
+  try{
+    const mod=await import(SB_LIB);
+    sb=mod.createClient(cfg.supabaseUrl,cfg.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  }catch(e){sb=null;return}
+  sb.auth.onAuthStateChange((ev,session)=>{
+    const was=user&&user.id;user=session?session.user:null;
+    if(ev==='PASSWORD_RECOVERY'){recovering=true;go('login');return}
+    if((user&&user.id)!==was){cur=null;reloadWorks().then(()=>user&&sync().catch(()=>{}));if(route()==='login'&&user&&!recovering)go('shelf');else render()}
+  });
+  const {data:s}=await sb.auth.getSession();user=s&&s.session?s.session.user:null;
+  await reloadWorks();
+  if(user)sync().catch(()=>{});
+  window.addEventListener('online',()=>{if(user)sync().then(()=>toast('എല്ലാം അപ്‌ലോഡ് ആയി')).catch(()=>{})});
+}
+
 let works=[], cur=null, step=0, play={s:0,l:0,on:false,timer:null}, bookPage=0, busy='', confirmDel=false, loaded=false, installEvt=null, confirmRedo=false;
 let chain=Promise.resolve();
 
 function toast(msg,bad){toastEl.textContent=msg;toastEl.className=bad?'bad':'';toastEl.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>{toastEl.hidden=true},2600)}
-function route(){const h=(location.hash||'#shelf').slice(1);return ['shelf','new','work','cast','plan'].includes(h)?h:'shelf'}
+function route(){const h=(location.hash||'#shelf').slice(1);return ['shelf','new','work','cast','plan','login'].includes(h)?h:'shelf'}
 function go(h){if(location.hash==='#'+h)render();else location.hash=h}
 function stopPlay(){clearTimeout(play.timer);play.on=false;try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}}
 function doneSteps(w){return [!!w.hasPhoto,!!(w.text&&w.text.trim()),!!(w.scenes&&w.scenes.length)]}
@@ -88,7 +198,7 @@ function persist(quiet){
   if(!cur||cur.demo)return;
   const body={id:cur.id,title:cur.title,child:cur.child,kind:cur.kind,consent:!!cur.consent,text:cur.text||'',scenes:cur.scenes||[],hasPhoto:!!cur.hasPhoto,created:cur.created,updated:Date.now()};
   const i=works.findIndex(w=>w.id===body.id);if(i>=0)works[i]=body;else works.unshift(body);
-  chain=chain.then(()=>store.put(body)).then(()=>{if(!quiet)toast('സേവ് ചെയ്തു')},()=>toast('സേവ് ചെയ്യാനായില്ല',true));
+  chain=chain.then(()=>data.put(body)).then(()=>{if(!quiet)toast('സേവ് ചെയ്തു')},()=>{if(user)toast('ഫോണിൽ സേവ് ചെയ്തു. നെറ്റ് വന്നാൽ അപ്‌ലോഡ് ആകും.');else toast('സേവ് ചെയ്യാനായില്ല',true)});
 }
 let typingTimer=null;
 function persistSoon(){clearTimeout(typingTimer);typingTimer=setTimeout(()=>persist(true),800)}
@@ -106,10 +216,42 @@ function workCard(w){
     '<span class="muted small">എഴുതിയത്: '+esc(w.child||'—')+'</span>'+
     '<span class="steps3"><span class="'+(d[0]?'done':'')+'">ഫോട്ടോ</span><span class="'+(d[1]?'done':'')+'">എഴുത്ത്</span><span class="'+(d[2]?'done':'')+'">രംഗങ്ങൾ</span></span></button>';
 }
+function accountStrip(){
+  if(!loaded)return '';
+  if(!sbConfigured) return works.length?'<p class="muted small">സൃഷ്ടികൾ ഈ ഫോണിൽ/കമ്പ്യൂട്ടറിൽ മാത്രമാണ് സൂക്ഷിക്കുന്നത്.</p>':'';
+  if(!sb) return '<p class="note bad">ക്ലൗഡുമായി ബന്ധപ്പെടാനായില്ല (നെറ്റ് ഇല്ല?). ഇപ്പോൾ ഈ ഫോണിൽ സേവ് ആകും.</p>';
+  if(!user) return '<div class="plain row between"><span class="small">ലോഗിൻ ചെയ്താൽ സൃഷ്ടികൾ ഏത് ഫോണിലും കമ്പ്യൂട്ടറിലും കാണാം.</span><a class="btn ghost" href="#login" style="text-decoration:none">ടീച്ചർ ലോഗിൻ</a></div>';
+  let h='<div class="plain form"><div class="row between"><span class="small">ലോഗിൻ: <b>'+esc(user.email||'')+'</b></span><button class="btn ghost" data-act="logout">ലോഗൗട്ട്</button></div>';
+  if(pendingCount) h+='<p class="small" style="color:var(--warn)">'+pendingCount+' സൃഷ്ടി ഇനിയും അപ്‌ലോഡ് ആകാനുണ്ട്. നെറ്റ് വന്നാൽ തനിയെ ആകും. <button class="btn ghost" data-act="syncNow" style="padding:4px 10px;font-size:.85rem">ഇപ്പോൾ ശ്രമിക്കുക</button></p>';
+  if(guestCount) h+='<div class="row between"><span class="small">ലോഗിൻ ചെയ്യുന്നതിന് മുമ്പ് ഈ ഫോണിൽ ചേർത്ത '+guestCount+' സൃഷ്ടി ഉണ്ട്.</span><button class="btn" data-act="moveGuest">അക്കൗണ്ടിലേക്ക് മാറ്റുക</button></div>';
+  return h+'</div>';
+}
+function loginView(){
+  if(!sbConfigured) return '<h2>ടീച്ചർ ലോഗിൻ</h2><p class="note">ക്ലൗഡ് സേവ് ഇതുവരെ സജ്ജമാക്കിയിട്ടില്ല. README-യിലെ Supabase ഘട്ടങ്ങൾ നോക്കുക.</p>';
+  if(!sb) return '<h2>ടീച്ചർ ലോഗിൻ</h2><p class="note bad">ലോഗിന് നെറ്റ് വേണം. നെറ്റ് വന്ന ശേഷം പേജ് വീണ്ടും തുറക്കുക.</p>';
+  if(recovering) return '<h2>പുതിയ പാസ്‌വേഡ്</h2><form class="form plain" id="newPassForm"><div class="field"><label for="np">പുതിയ പാസ്‌വേഡ് (കുറഞ്ഞത് 8 അക്ഷരം)</label><input type="password" id="np" minlength="8" autocomplete="new-password" required></div><div class="row"><button class="btn" type="submit"'+(authBusy?' disabled':'')+'>സേവ് ചെയ്യുക</button></div>'+(authMsg?'<p class="note">'+esc(authMsg)+'</p>':'')+'</form>';
+  if(user) return '<h2>ടീച്ചർ ലോഗിൻ</h2><div class="plain form"><p>ലോഗിൻ ചെയ്തിരിക്കുന്നു: <b>'+esc(user.email||'')+'</b></p><div class="row"><a class="btn" href="#shelf" style="text-decoration:none">ഷെൽഫിലേക്ക്</a><button class="btn ghost" data-act="logout">ലോഗൗട്ട്</button></div></div>';
+  return '<h2>ടീച്ചർ ലോഗിൻ</h2><form class="form plain" id="loginForm">'+
+    '<div class="field"><label for="le">ഇമെയിൽ</label><input type="email" id="le" autocomplete="email" inputmode="email" required value="'+esc(authEmail)+'"></div>'+
+    '<div class="field"><label for="lp">പാസ്‌വേഡ് (കുറഞ്ഞത് 8 അക്ഷരം)</label><input type="password" id="lp" minlength="8" autocomplete="current-password" required></div>'+
+    '<div class="row"><button class="btn" type="submit" data-mode="in"'+(authBusy?' disabled':'')+'>ലോഗിൻ</button><button class="btn ghost" type="submit" data-mode="up"'+(authBusy?' disabled':'')+'>പുതിയ അക്കൗണ്ട്</button></div>'+
+    '<button class="btn ghost" type="button" data-act="forgot" style="align-self:flex-start;font-size:.9rem">പാസ്‌വേഡ് മറന്നോ?</button>'+
+    (authMsg?'<p class="note">'+esc(authMsg)+'</p>':'')+
+    '<p class="muted small">ഓരോ ടീച്ചർക്കും സ്വന്തം അക്കൗണ്ട്. ഒരു ടീച്ചറുടെ സൃഷ്ടികൾ മറ്റാർക്കും കാണാനാവില്ല.</p></form>';
+}
+function authErr(e){const m=(e&&e.message)||'';
+  if(/invalid login/i.test(m))return 'ഇമെയിലോ പാസ്‌വേഡോ ശരിയല്ല.';
+  if(/not confirmed/i.test(m))return 'ഇമെയിൽ ഇതുവരെ ഉറപ്പിച്ചിട്ടില്ല. ഇൻബോക്സിൽ വന്ന ലിങ്ക് അമർത്തുക.';
+  if(/already registered|already exists/i.test(m))return 'ഈ ഇമെയിലിൽ അക്കൗണ്ട് ഉണ്ട്. ലോഗിൻ ചെയ്യുക.';
+  if(/password/i.test(m))return 'പാസ്‌വേഡ് കുറഞ്ഞത് 8 അക്ഷരം വേണം.';
+  if(/rate|too many/i.test(m))return 'കുറച്ച് കഴിഞ്ഞ് വീണ്ടും ശ്രമിക്കുക.';
+  if(/fetch|network/i.test(m))return 'നെറ്റ് കണക്ഷൻ ഇല്ല.';
+  return 'നടന്നില്ല: '+m;
+}
 function shelfView(){
   let h=boardHTML()+'<div class="row between"><h2>ക്ലാസ് ഷെൽഫ്</h2><a class="btn" href="#new" style="text-decoration:none">പുതിയ സൃഷ്ടി</a></div>';
   if(loaded&&!persistent) h+='<p class="note bad">ഈ ബ്രൗസറിൽ സൃഷ്ടികൾ സൂക്ഷിക്കാനാവില്ല (ഉദാ: private mode). പേജ് അടച്ചാൽ ഇവ നഷ്ടമാകും.</p>';
-  else if(loaded&&works.length) h+='<p class="muted small">ഇപ്പോൾ സൃഷ്ടികൾ ഈ ഫോണിൽ/കമ്പ്യൂട്ടറിൽ മാത്രമാണ് സൂക്ഷിക്കുന്നത്. ടീച്ചർ ലോഗിനും ക്ലൗഡ് സേവും അടുത്ത ഘട്ടത്തിൽ വരും.</p>';
+  h+=accountStrip();
   h+='<div class="list">';
   if(works.length) h+=works.map(workCard).join('');
   else h+='<p class="note">'+(loaded?'ഇതുവരെ സൃഷ്ടികളൊന്നും ചേർത്തിട്ടില്ല. ':'ഷെൽഫ് തുറക്കുന്നു… ')+'ആദ്യത്തേത് ചേർക്കാൻ "പുതിയ സൃഷ്ടി" അമർത്തുക. ആപ്പ് എങ്ങനെ പ്രവർത്തിക്കുന്നു എന്ന് കാണാൻ താഴെയുള്ള ഉദാഹരണം തുറന്നുനോക്കാം.</p>'+workCard(DEMO);
@@ -216,7 +358,7 @@ function planView(){
     '<div><b>കഥാപാത്രങ്ങൾ</b><div class="muted small">മിട്ടു, അപ്പു, മീനു, കുഞ്ഞൻ</div></div></div>'+
   '<div class="plain form"><h3>ഇപ്പോൾ പ്രവർത്തിക്കുന്നത്</h3><ul class="tight"><li>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാവുന്ന വെബ് ആപ്പ്, നെറ്റ് ഇല്ലെങ്കിലും തുറക്കും</li><li>ഫോണിന്റെ ക്യാമറയിൽ നിന്ന് നേരിട്ട് ഫോട്ടോ</li><li>ടീച്ചർക്ക് ടൈപ്പ് ചെയ്യാം, അല്ലെങ്കിൽ മൈക്ക് അമർത്തി പറഞ്ഞ് എഴുതാം (ഫ്രീ)</li><li>രംഗ സഹായി: കുട്ടിയുടെ വാചകങ്ങൾ തനിയെ രംഗങ്ങളാക്കുന്നു, ടീച്ചർ തിരുത്തുന്നു (ഫ്രീ)</li><li>ആനിമേഷനായും പുസ്തകമായും കാണാം</li><li>സൃഷ്ടികൾ ഈ ഉപകരണത്തിൽ സേവ് ആകുന്നു</li></ul>'+
     '<h3>ഇനി ചേർക്കേണ്ടത്</h3><ul class="tight"><li>ടീച്ചർ ലോഗിൻ, എല്ലാ ഫോണിലും കാണാവുന്ന ക്ലൗഡ് സേവ് (Supabase)</li><li>കുട്ടിയുടെ സ്വന്തം ശബ്ദം റെക്കോർഡ് ചെയ്യൽ</li><li>MP4 വീഡിയോ ആയും PDF പുസ്തകമായും ഡൗൺലോഡ്</li><li>രക്ഷിതാക്കൾക്ക് QR കോഡ് വഴി പങ്കുവെക്കൽ</li><li>കുട്ടി വരച്ച ചിത്രം തന്നെ അനക്കൽ</li></ul></div>'+
-  '<div class="plain form"><h3>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാൻ</h3><dl class="kv"><dt>Android</dt><dd>Chrome-ൽ ഈ സൈറ്റ് തുറന്ന് മെനുവിലെ "Install app" / "Add to Home screen".</dd><dt>iPhone</dt><dd>Safari-യിൽ തുറന്ന് Share → "Add to Home Screen".</dd><dt>കമ്പ്യൂട്ടർ</dt><dd>Chrome/Edge-ൽ അഡ്രസ് ബാറിലെ ഇൻസ്റ്റാൾ ഐക്കൺ.</dd></dl>'+
+  '<div class="plain form"><h3>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാൻ</h3><p>മറ്റ് ടീച്ചർമാർക്ക് ഈ ലിങ്ക് അയച്ചാൽ മതി (QR കോഡും അവിടെയുണ്ട്): <a href="/install">'+esc(location.host)+'/install</a></p><dl class="kv"><dt>Android</dt><dd>Chrome-ൽ ഈ സൈറ്റ് തുറന്ന് മെനുവിലെ "Install app" / "Add to Home screen".</dd><dt>iPhone</dt><dd>Safari-യിൽ തുറന്ന് Share → "Add to Home Screen".</dd><dt>കമ്പ്യൂട്ടർ</dt><dd>Chrome/Edge-ൽ അഡ്രസ് ബാറിലെ ഇൻസ്റ്റാൾ ഐക്കൺ.</dd></dl>'+
     (needCode&&getCode()?'<div class="row"><button class="btn ghost" data-act="clearCode">ക്ലാസ് കോഡ് മാറ്റുക</button></div>':'')+'</div>';
 }
 
@@ -224,8 +366,8 @@ function render(){
   stopPlay();micStop();
   const r=route();
   if(r==='work'&&!cur){location.hash='shelf';return}
-  app.innerHTML=r==='shelf'?shelfView():r==='new'?newView():r==='work'?workView():r==='cast'?castView():planView();
-  document.querySelectorAll('nav.tabs a').forEach(a=>{const on=a.dataset.tab===r||(r==='work'&&a.dataset.tab==='shelf');if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+  app.innerHTML=r==='shelf'?shelfView():r==='new'?newView():r==='work'?workView():r==='cast'?castView():r==='login'?loginView():planView();
+  document.querySelectorAll('nav.tabs a').forEach(a=>{const on=a.dataset.tab===r||((r==='work'||r==='login')&&a.dataset.tab==='shelf');if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
   if(r==='work'&&step===3)drawStage();
   if(r==='work')loadPhoto();
 }
@@ -271,14 +413,14 @@ async function onPhoto(file){
     if(d.length>900000)d=await shrink(file,1200,.62);
     if(d.length>900000)d=await shrink(file,900,.5);
     cur.photo=d;cur.hasPhoto=true;renderStep();
-    const id=cur.id;chain=chain.then(()=>store.putPhoto(id,d)).catch(()=>toast('ഫോട്ടോ സേവ് ചെയ്യാനായില്ല',true));
+    const id=cur.id;chain=chain.then(()=>data.putPhoto(id,d)).catch(()=>{if(!user)toast('ഫോട്ടോ സേവ് ചെയ്യാനായില്ല',true)});
     persist();
   }catch(e){toast('ഈ ഫോട്ടോ തുറക്കാനായില്ല. മറ്റൊന്ന് ശ്രമിക്കുക.',true)}
 }
 function loadPhoto(){
   if(!cur||cur.demo||!cur.hasPhoto||cur.photo||cur._loading)return;
   cur._loading=true;const w=cur;
-  store.getPhoto(w.id).then(d=>{w._loading=false;
+  data.getPhoto(w.id).then(d=>{w._loading=false;
     if(typeof d==='string'&&d.indexOf('data:image/')===0){w.photo=d;if(cur===w&&route()==='work'&&(step===0||step===1||step===4))renderStep()}
     else{const el=document.getElementById('photoWait');if(el)el.textContent='ഫോട്ടോ കണ്ടെത്താനായില്ല. വീണ്ടും ചേർക്കുക.'}},()=>{w._loading=false});
 }
@@ -414,6 +556,10 @@ document.addEventListener('click',e=>{
   else if(a==='step'){step=+t.dataset.n;confirmRedo=false;renderStep();window.scrollTo(0,0)}
   else if(a==='ocr')doOcr();
   else if(a==='scenes')doScenes();
+  else if(a==='logout')doLogout();
+  else if(a==='moveGuest')moveGuestWorks();
+  else if(a==='syncNow')sync().then(()=>toast('എല്ലാം അപ്‌ലോഡ് ആയി'),()=>toast('ഇപ്പോഴും നെറ്റ് ഇല്ല',true));
+  else if(a==='forgot')doForgot();
   else if(a==='auto'){if(cur.scenes&&cur.scenes.length){confirmRedo=true;renderStep()}else applyAuto()}
   else if(a==='autoYes'){confirmRedo=false;applyAuto()}
   else if(a==='autoNo'){confirmRedo=false;renderStep()}
@@ -432,7 +578,7 @@ document.addEventListener('click',e=>{
   else if(a==='bprev'){bookPage=Math.max(0,bookPage-1);renderStep()}
   else if(a==='del'){confirmDel=true;render()}
   else if(a==='delNo'){confirmDel=false;render()}
-  else if(a==='delYes'){const id=cur.id;cur=null;confirmDel=false;works=works.filter(w=>w.id!==id);chain=chain.then(()=>store.del(id)).then(()=>toast('കളഞ്ഞു'),()=>toast('കളയാനായില്ല',true));go('shelf')}
+  else if(a==='delYes'){const id=cur.id;cur=null;confirmDel=false;works=works.filter(w=>w.id!==id);chain=chain.then(()=>data.del(id)).then(()=>toast('കളഞ്ഞു'),()=>toast(user?'ക്ലൗഡിൽ നിന്ന് കളയാനായില്ല. നെറ്റ് നോക്കുക.':'കളയാനായില്ല',true));go('shelf')}
 });
 document.addEventListener('input',e=>{
   const t=e.target,f=t.dataset&&t.dataset.f;if(!f||!cur||cur.demo)return;
@@ -456,6 +602,44 @@ document.addEventListener('submit',e=>{
   cur={id:'w'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),title,child,kind:document.getElementById('nKind').value,consent:true,text:'',scenes:[],hasPhoto:false,created:Date.now()};
   step=0;play.s=0;play.l=0;bookPage=0;confirmDel=false;persist();go('work');
 });
+document.addEventListener('submit',async e=>{
+  if(e.target.id==='loginForm'){
+    e.preventDefault();if(authBusy||!sb)return;
+    const mode=(e.submitter&&e.submitter.dataset.mode)||'in';
+    const email=document.getElementById('le').value.trim(),password=document.getElementById('lp').value;authEmail=email;
+    authBusy=true;authMsg='';render();
+    try{
+      if(mode==='up'){
+        const {data:d,error}=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/#shelf'}});
+        if(error)throw error;
+        authMsg=d.session?'':'അക്കൗണ്ട് ഉണ്ടാക്കി. '+email+' എന്ന ഇമെയിലിൽ വന്ന ലിങ്ക് അമർത്തി ഉറപ്പിച്ച ശേഷം ലോഗിൻ ചെയ്യുക.';
+      }else{
+        const {error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;
+      }
+    }catch(err){authMsg=authErr(err)}
+    authBusy=false;if(route()==='login')render();
+  }
+  else if(e.target.id==='newPassForm'){
+    e.preventDefault();if(authBusy)return;authBusy=true;render();
+    const {error}=await sb.auth.updateUser({password:document.getElementById('np').value});
+    authBusy=false;
+    if(error){authMsg=authErr(error);render()}else{recovering=false;authMsg='';toast('പാസ്‌വേഡ് മാറ്റി');go('shelf')}
+  }
+});
+async function doForgot(){
+  const email=(document.getElementById('le')||{}).value;
+  if(!email||!email.trim()){authMsg='ആദ്യം മുകളിൽ ഇമെയിൽ ടൈപ്പ് ചെയ്യുക.';render();return}
+  const {error}=await sb.auth.resetPasswordForEmail(email.trim(),{redirectTo:location.origin+'/#login'});
+  authMsg=error?authErr(error):'പാസ്‌വേഡ് മാറ്റാനുള്ള ലിങ്ക് '+email.trim()+' എന്ന ഇമെയിലിലേക്ക് അയച്ചു.';render();
+}
+async function doLogout(){
+  if(!sb||!user)return;
+  try{await sync()}catch(e){}
+  if(pendingCount){toast('ചില സൃഷ്ടികൾ ഇനിയും അപ്‌ലോഡ് ആകാനുണ്ട്. നെറ്റ് ഉള്ളപ്പോൾ ലോഗൗട്ട് ചെയ്യുക.',true);return}
+  // remove this teacher's copies from the device so the next person on this phone can't see them
+  const uid=user.id;for(const w of (await store.list()).filter(x=>x._owner===uid))await store.del(w.id);
+  await sb.auth.signOut();user=null;cur=null;works=[];await reloadWorks();toast('ലോഗൗട്ട് ചെയ്തു');go('shelf');
+}
 window.addEventListener('hashchange',render);
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(route()==='shelf')render()});
 window.addEventListener('appinstalled',()=>{installEvt=null;toast('ഫോണിൽ ചേർത്തു')});
@@ -466,8 +650,11 @@ render();
   try{persistent=await store.persistent();works=(await store.list()).sort((a,b)=>(b.created||0)-(a.created||0))}catch(e){persistent=false}
   loaded=true;try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
   if(route()==='shelf')render();
-  try{const r=await fetch('/api/config',{cache:'no-store'});if(r.ok){const j=await r.json();aiOn=!!j.ai;needCode=!!j.needCode}}catch(e){aiOn=false}
+  let cfg={};
+  try{const r=await fetch('/api/config',{cache:'no-store'});if(r.ok){cfg=await r.json();aiOn=!!cfg.ai;needCode=!!cfg.needCode}}catch(e){aiOn=false}
   if(route()==='work')renderStep();
+  await initCloud(cfg);
+  if(route()==='shelf'||route()==='login')render();
 })();
 if('serviceWorker' in navigator&&location.protocol!=='file:'){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{})})}
 })();

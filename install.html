@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>കഥക്കൂട് — ആപ്പ് ഡൗൺലോഡ്</title>
+<meta name="description" content="കഥക്കൂട് ആപ്പ് ഫോണിലും കമ്പ്യൂട്ടറിലും ഇൻസ്റ്റാൾ ചെയ്യാം">
+<meta name="theme-color" content="#1E4B47">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+Chettan+2:wght@500;700;800&family=Noto+Sans+Malayalam:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  body{padding-bottom:40px}
+  .hero{align-items:center;text-align:center;gap:12px}
+  .hero img{width:96px;height:96px;border-radius:22px}
+  .bigbtn{font-size:1.2rem;padding:14px 22px;text-decoration:none;display:inline-block}
+  .os{display:flex;flex-direction:column;gap:8px}
+  .os ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
+  #qr{background:#fff;padding:12px;border-radius:10px;display:inline-block;line-height:0}
+  #qr canvas,#qr img{width:200px;height:200px}
+  .center{text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .linkbox{font-family:monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;word-break:break-all}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="board hero">
+    <img src="/icons/icon-192.png" alt="">
+    <h1>കഥക്കൂട്</h1>
+    <p>കുട്ടികളുടെ കഥയും കവിതയും ചിത്രവും സംസാരിക്കുന്ന വീഡിയോയും പുസ്തകവും ആക്കുന്ന ആപ്പ്. ഫ്രീ.</p>
+    <span class="chalk" aria-hidden="true"></span>
+  </header>
+
+  <div class="plain center" id="installBox">
+    <button class="btn bigbtn" id="installBtn" hidden>ആപ്പ് ഇൻസ്റ്റാൾ ചെയ്യുക</button>
+    <p id="installedMsg" class="note" hidden>ആപ്പ് ഈ ഫോണിൽ ഇൻസ്റ്റാൾ ആയിട്ടുണ്ട്. ഹോം സ്ക്രീനിലെ "കഥക്കൂട്" ഐക്കൺ തുറക്കുക.</p>
+    <a class="btn ghost" href="/" style="text-decoration:none">ബ്രൗസറിൽ തന്നെ തുറക്കുക</a>
+  </div>
+
+  <div class="plain os" id="android">
+    <h3>Android ഫോൺ</h3>
+    <ol>
+      <li>ഈ പേജ് <b>Chrome</b>-ൽ തുറക്കുക.</li>
+      <li>മുകളിലെ "ആപ്പ് ഇൻസ്റ്റാൾ ചെയ്യുക" അമർത്തുക. ബട്ടൺ കാണുന്നില്ലെങ്കിൽ, മുകളിൽ വലതുവശത്തെ ⋮ മെനുവിൽ <b>Install app</b> അല്ലെങ്കിൽ <b>Add to Home screen</b>.</li>
+      <li>ഹോം സ്ക്രീനിൽ പച്ച പുസ്തക ഐക്കൺ വരും. അത് തുറന്നാൽ മതി.</li>
+    </ol>
+  </div>
+
+  <div class="plain os" id="ios">
+    <h3>iPhone / iPad</h3>
+    <ol>
+      <li>ഈ പേജ് <b>Safari</b>-യിൽ തുറക്കുക.</li>
+      <li>താഴെയുള്ള Share ബട്ടൺ (മുകളിലേക്ക് അമ്പുള്ള ചതുരം) അമർത്തുക.</li>
+      <li><b>Add to Home Screen</b> → <b>Add</b>.</li>
+    </ol>
+  </div>
+
+  <div class="plain os">
+    <h3>കമ്പ്യൂട്ടർ</h3>
+    <ol>
+      <li>Chrome അല്ലെങ്കിൽ Edge-ൽ തുറക്കുക.</li>
+      <li>അഡ്രസ് ബാറിന്റെ വലതുവശത്തെ ഇൻസ്റ്റാൾ ഐക്കൺ അമർത്തുക.</li>
+    </ol>
+  </div>
+
+  <div class="plain center">
+    <h3>മറ്റൊരു ടീച്ചർക്ക് കൊടുക്കാൻ</h3>
+    <p class="small muted">ഈ QR കോഡ് ഫോൺ ക്യാമറയിൽ സ്കാൻ ചെയ്താൽ ഈ പേജ് തുറക്കും.</p>
+    <div id="qr" aria-label="ഡൗൺലോഡ് ലിങ്കിന്റെ QR കോഡ്"></div>
+    <div class="linkbox" id="link"></div>
+    <button class="btn ghost" id="copyBtn">ലിങ്ക് കോപ്പി ചെയ്യുക</button>
+  </div>
+</div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var link = location.origin + '/install';
+  document.getElementById('link').textContent = link;
+  try { new QRCode(document.getElementById('qr'), { text: link, width: 400, height: 400, correctLevel: QRCode.CorrectLevel.M }); }
+  catch (e) { document.getElementById('qr').hidden = true; }
+
+  var toastEl = document.getElementById('toast');
+  function toast(m){ toastEl.textContent = m; toastEl.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function(){ toastEl.hidden = true; }, 2400); }
+  document.getElementById('copyBtn').addEventListener('click', function(){
+    (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(function(){ toast('ലിങ്ക് കോപ്പി ചെയ്തു'); }, function(){ toast(link); });
+  });
+
+  // show the right phone first
+  var ua = navigator.userAgent;
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIOS) { var w = document.querySelector('.wrap'); w.insertBefore(document.getElementById('ios'), document.getElementById('android')); }
+
+  var standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (standalone) document.getElementById('installedMsg').hidden = false;
+
+  var evt = null, btn = document.getElementById('installBtn');
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); evt = e; btn.hidden = false; });
+  btn.addEventListener('click', function(){ if (!evt) return; evt.prompt(); evt.userChoice.finally(function(){ evt = null; btn.hidden = true; }); });
+  window.addEventListener('appinstalled', function(){ btn.hidden = true; document.getElementById('installedMsg').hidden = false; });
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function(){});
+})();
+</script>
+</body>
+</html>
