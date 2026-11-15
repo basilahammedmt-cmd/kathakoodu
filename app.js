@@ -75,7 +75,7 @@ async function api(path,body){
 }
 
 let persistent=true;
-let works=[], cur=null, step=0, play={s:0,l:0,on:false,timer:null}, bookPage=0, busy='', confirmDel=false, loaded=false, installEvt=null;
+let works=[], cur=null, step=0, play={s:0,l:0,on:false,timer:null}, bookPage=0, busy='', confirmDel=false, loaded=false, installEvt=null, confirmRedo=false;
 let chain=Promise.resolve();
 
 function toast(msg,bad){toastEl.textContent=msg;toastEl.className=bad?'bad':'';toastEl.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>{toastEl.hidden=true},2600)}
@@ -142,17 +142,33 @@ function stepHTML(){
   if(step===1){
     const canRead=aiOn&&w.photo&&!w.demo;
     return '<div class="plain form"><div class="field"><label for="txt">കുട്ടി എഴുതിയത് (വാക്കുകൾ മാറ്റരുത്, അക്ഷരത്തെറ്റ് മാത്രം തിരുത്താം)</label>'+
-      '<textarea class="ruled" id="txt" data-f="text" placeholder="ഇവിടെ ടൈപ്പ് ചെയ്യാം, അല്ലെങ്കിൽ ഫോട്ടോയിൽ നിന്ന് വായിപ്പിക്കാം"'+(w.demo?' readonly':'')+'>'+esc(w.text||'')+'</textarea></div>'+
-      (canRead?codeBox()+'<div class="row"><button class="btn" data-act="ocr"'+(busy?' disabled':'')+'>'+(busy==='ocr'?'വായിക്കുന്നു…':'ഫോട്ടോയിൽ നിന്ന് കൈയക്ഷരം വായിക്കുക')+'</button></div><p class="muted small">Claude വായിച്ചതിൽ തെറ്റുകൾ വരാം. ടീച്ചർ ഒരിക്കൽ ഒത്തുനോക്കണം. വായിക്കാൻ പറ്റാത്ത വാക്കുകൾ [?] എന്ന് കാണിക്കും.</p>':
-       (!w.demo?'<p class="muted small">'+(w.photo?'Claude ഇപ്പോൾ ലഭ്യമല്ല (സെർവറിൽ API key ചേർത്തിട്ടില്ല, അല്ലെങ്കിൽ നെറ്റ് ഇല്ല). ടൈപ്പ് ചെയ്യാം.':'ആദ്യം ഫോട്ടോ ചേർത്താൽ കൈയക്ഷരം തനിയെ വായിപ്പിക്കാം.')+'</p>':''))+
+      '<textarea class="ruled" id="txt" data-f="text" placeholder="ഇവിടെ ടൈപ്പ് ചെയ്യാം, അല്ലെങ്കിൽ മൈക്ക് അമർത്തി വായിച്ചുകൊടുക്കാം"'+(w.demo?' readonly':'')+'>'+esc(w.text||'')+'</textarea></div>'+
+      (w.demo?'':'<div class="row">'+micBtn('txt',true)+'</div><p class="muted small">'+(SR?'മൈക്ക് അമർത്തി കുട്ടിയുടെ കഥ ഉറക്കെ വായിക്കുക. ഒരു ഭാഗം കഴിഞ്ഞാൽ Enter അമർത്തി പുതിയ ഖണ്ഡിക തുടങ്ങാം. കേട്ടെഴുതിയതിൽ തെറ്റുണ്ടെങ്കിൽ ടൈപ്പ് ചെയ്ത് തിരുത്താം.':
+        'ഈ ബ്രൗസറിൽ വോയിസ് ബട്ടൺ പ്രവർത്തിക്കില്ല. ഫോണിലെ കീബോർഡിലെ മൈക്ക് (Gboard-ൽ മലയാളം) ഉപയോഗിച്ച് പറഞ്ഞ് എഴുതാം, അല്ലെങ്കിൽ Chrome-ൽ തുറക്കുക.')+'</p>')+
+      (canRead?codeBox()+'<div class="row"><button class="btn ghost" data-act="ocr"'+(busy?' disabled':'')+'>'+(busy==='ocr'?'വായിക്കുന്നു…':'ഫോട്ടോയിൽ നിന്ന് Claude വായിക്കട്ടെ')+'</button></div>':'')+
       '<div class="row"><button class="btn ghost" data-act="step" data-n="2">അടുത്തത്: രംഗങ്ങൾ</button></div></div>';
   }
   if(step===2){
     let h='<div class="form">';
-    if(aiOn&&!w.demo) h+='<div class="plain form"><p>കഥയുടെ അർത്ഥം മാറ്റാതെ 4–6 രംഗങ്ങളാക്കി, സ്ഥിരം കഥാപാത്രങ്ങൾക്ക് സംഭാഷണം നൽകും.</p>'+codeBox()+'<div class="row"><button class="btn" data-act="scenes"'+((busy||!(w.text||'').trim())?' disabled':'')+'>'+(busy==='scenes'?'രംഗങ്ങൾ ഒരുക്കുന്നു…':(w.scenes&&w.scenes.length?'വീണ്ടും രംഗങ്ങളാക്കുക':'എഴുത്തിനെ രംഗങ്ങളാക്കുക'))+'</button></div>'+(!(w.text||'').trim()?'<p class="muted small">ആദ്യം "എഴുത്ത്" ഘട്ടത്തിൽ കഥ ചേർക്കുക.</p>':'')+'</div>';
+    const has=(w.scenes&&w.scenes.length), txt=(w.text||'').trim();
+    if(!w.demo){
+      h+='<div class="plain form"><h3>രംഗ സഹായി</h3><p>കഥയിലെ വാചകങ്ങൾ 4–6 രംഗങ്ങളായി തിരിച്ച്, സ്ഥലവും ആര് പറയണമെന്നും ഊഹിച്ചുവെക്കും. കുട്ടിയുടെ വാക്കുകൾ മാറില്ല. പിന്നെ ടീച്ചർക്ക് താഴെ തിരുത്താം.</p>'+
+        (confirmRedo?'<div class="row"><button class="btn danger" data-act="autoYes">ഇപ്പോഴുള്ള രംഗങ്ങൾ മാറ്റിയെഴുതുക</button><button class="btn ghost" data-act="autoNo">വേണ്ട</button></div>':
+        '<div class="row"><button class="btn" data-act="auto"'+(!txt?' disabled':'')+'>'+(has?'വീണ്ടും തനിയെ ഒരുക്കുക':'രംഗങ്ങൾ തനിയെ ഒരുക്കുക')+'</button>'+
+        (aiOn?'<button class="btn ghost" data-act="scenes"'+((busy||!txt)?' disabled':'')+'>'+(busy==='scenes'?'Claude ഒരുക്കുന്നു…':'Claude ഒരുക്കട്ടെ')+'</button>':'')+'</div>')+
+        (aiOn?codeBox():'')+
+        (!txt?'<p class="muted small">ആദ്യം "എഴുത്ത്" ഘട്ടത്തിൽ കഥ ചേർക്കുക.</p>':'')+
+        '<details class="tips"><summary>രംഗങ്ങൾ ഒരുക്കാൻ ചില നുറുങ്ങുകൾ</summary><ul class="tight">'+
+        '<li>സ്ഥലമോ സമയമോ സംഭവമോ മാറുമ്പോൾ പുതിയ രംഗം തുടങ്ങുക.</li>'+
+        '<li>ഓരോ രംഗത്തിലും 1–3 ചെറിയ വരി മതി. നീണ്ട വാചകം രണ്ടായി മുറിക്കാം.</li>'+
+        '<li>കഥ പറയുന്നത് മിട്ടു (തത്ത). കഥയിലെ മൃഗമോ കുട്ടിയോ സംസാരിക്കുന്ന ഇടത്ത് അപ്പു, മീനു, കുഞ്ഞൻ എന്നിവരെ തിരഞ്ഞെടുക്കുക.</li>'+
+        '<li>കുട്ടിയുടെ സ്വന്തം വാക്കുകൾ തന്നെ ഉപയോഗിക്കുക; പുതിയ സംഭവങ്ങളോ ഗുണപാഠമോ ചേർക്കേണ്ട.</li>'+
+        '<li>കുട്ടിയോട് ചോദിക്കാം: "ഇവിടെ ആന എന്തായിരിക്കും പറഞ്ഞത്?" ആ മറുപടി ഒരു വരിയാക്കാം.</li>'+
+        '<li>ഓരോ വരിയുടെയും അടുത്തുള്ള മൈക്ക് അമർത്തി പറഞ്ഞും എഴുതാം.</li></ul></details></div>';
+    }
     (w.scenes||[]).forEach((sc,i)=>{
       h+='<div class="page scene"><div class="row between"><h3>രംഗം '+(i+1)+'</h3><span class="row"><select data-f="place" data-s="'+i+'" aria-label="സ്ഥലം" style="width:auto">'+Object.keys(PLACES).map(k=>'<option value="'+k+'"'+(k===sc.place?' selected':'')+'>'+PLACES[k]+'</option>').join('')+'</select><button class="x" data-act="delScene" data-s="'+i+'" aria-label="രംഗം കളയുക">×</button></span></div>';
-      sc.lines.forEach((ln,j)=>{h+='<div class="line">'+castSel(ln.who,i,j)+'<textarea data-f="line" data-s="'+i+'" data-l="'+j+'" aria-label="സംഭാഷണം">'+esc(ln.text)+'</textarea><button class="x" data-act="delLine" data-s="'+i+'" data-l="'+j+'" aria-label="വരി കളയുക">×</button></div>'});
+      sc.lines.forEach((ln,j)=>{h+='<div class="line">'+castSel(ln.who,i,j)+'<textarea id="ln-'+i+'-'+j+'" data-f="line" data-s="'+i+'" data-l="'+j+'" aria-label="സംഭാഷണം">'+esc(ln.text)+'</textarea>'+micBtn('ln-'+i+'-'+j,false)+'<button class="x" data-act="delLine" data-s="'+i+'" data-l="'+j+'" aria-label="വരി കളയുക">×</button></div>'});
       h+='<div class="row"><button class="btn ghost" data-act="addLine" data-s="'+i+'">വരി ചേർക്കുക</button></div></div>';
     });
     h+='<div class="row"><button class="btn ghost" data-act="addScene">ഒരു രംഗം ചേർക്കുക</button>'+((w.scenes&&w.scenes.length)?'<button class="btn" data-act="step" data-n="3">വീഡിയോ ആയി കാണുക</button>':'')+'</div></div>';
@@ -198,14 +214,14 @@ function planView(){
     '<div><b>പുതിയ സൃഷ്ടി</b><div class="muted small">പേര്, കുട്ടിയുടെ ആദ്യപേര്, ഇനം, സമ്മതപത്രം</div></div>'+
     '<div><b>സൃഷ്ടിയുടെ പേജ്</b><div class="kid small"><div>1 ഫോട്ടോ: ക്യാമറയിലോ ഗാലറിയിലോ നിന്ന് പേപ്പറിന്റെ ഫോട്ടോ</div><div>2 എഴുത്ത്: കൈയക്ഷരം ടെക്സ്റ്റാക്കുക, ടീച്ചർ തിരുത്തുക</div><div>3 രംഗങ്ങൾ: 4–6 രംഗങ്ങളും സംഭാഷണവും</div><div>4 കാണുക: കഥാപാത്രങ്ങൾ സംസാരിക്കുന്ന ആനിമേഷൻ</div><div>5 ബുക്ക്: മറിച്ചുനോക്കാവുന്ന പുസ്തകം</div></div></div>'+
     '<div><b>കഥാപാത്രങ്ങൾ</b><div class="muted small">മിട്ടു, അപ്പു, മീനു, കുഞ്ഞൻ</div></div></div>'+
-  '<div class="plain form"><h3>ഇപ്പോൾ പ്രവർത്തിക്കുന്നത്</h3><ul class="tight"><li>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാവുന്ന വെബ് ആപ്പ്, നെറ്റ് ഇല്ലെങ്കിലും തുറക്കും</li><li>ഫോണിന്റെ ക്യാമറയിൽ നിന്ന് നേരിട്ട് ഫോട്ടോ</li><li>ഫോട്ടോയിലെ മലയാളം കൈയക്ഷരം Claude വായിക്കുന്നു</li><li>എഴുത്തിനെ രംഗങ്ങളും സംഭാഷണവും ആക്കുന്നു, കൈകൊണ്ട് തിരുത്താം</li><li>ആനിമേഷനായും പുസ്തകമായും കാണാം</li><li>സൃഷ്ടികൾ ഈ ഉപകരണത്തിൽ സേവ് ആകുന്നു</li></ul>'+
+  '<div class="plain form"><h3>ഇപ്പോൾ പ്രവർത്തിക്കുന്നത്</h3><ul class="tight"><li>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാവുന്ന വെബ് ആപ്പ്, നെറ്റ് ഇല്ലെങ്കിലും തുറക്കും</li><li>ഫോണിന്റെ ക്യാമറയിൽ നിന്ന് നേരിട്ട് ഫോട്ടോ</li><li>ടീച്ചർക്ക് ടൈപ്പ് ചെയ്യാം, അല്ലെങ്കിൽ മൈക്ക് അമർത്തി പറഞ്ഞ് എഴുതാം (ഫ്രീ)</li><li>രംഗ സഹായി: കുട്ടിയുടെ വാചകങ്ങൾ തനിയെ രംഗങ്ങളാക്കുന്നു, ടീച്ചർ തിരുത്തുന്നു (ഫ്രീ)</li><li>ആനിമേഷനായും പുസ്തകമായും കാണാം</li><li>സൃഷ്ടികൾ ഈ ഉപകരണത്തിൽ സേവ് ആകുന്നു</li></ul>'+
     '<h3>ഇനി ചേർക്കേണ്ടത്</h3><ul class="tight"><li>ടീച്ചർ ലോഗിൻ, എല്ലാ ഫോണിലും കാണാവുന്ന ക്ലൗഡ് സേവ് (Supabase)</li><li>കുട്ടിയുടെ സ്വന്തം ശബ്ദം റെക്കോർഡ് ചെയ്യൽ</li><li>MP4 വീഡിയോ ആയും PDF പുസ്തകമായും ഡൗൺലോഡ്</li><li>രക്ഷിതാക്കൾക്ക് QR കോഡ് വഴി പങ്കുവെക്കൽ</li><li>കുട്ടി വരച്ച ചിത്രം തന്നെ അനക്കൽ</li></ul></div>'+
   '<div class="plain form"><h3>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാൻ</h3><dl class="kv"><dt>Android</dt><dd>Chrome-ൽ ഈ സൈറ്റ് തുറന്ന് മെനുവിലെ "Install app" / "Add to Home screen".</dd><dt>iPhone</dt><dd>Safari-യിൽ തുറന്ന് Share → "Add to Home Screen".</dd><dt>കമ്പ്യൂട്ടർ</dt><dd>Chrome/Edge-ൽ അഡ്രസ് ബാറിലെ ഇൻസ്റ്റാൾ ഐക്കൺ.</dd></dl>'+
     (needCode&&getCode()?'<div class="row"><button class="btn ghost" data-act="clearCode">ക്ലാസ് കോഡ് മാറ്റുക</button></div>':'')+'</div>';
 }
 
 function render(){
-  stopPlay();
+  stopPlay();micStop();
   const r=route();
   if(r==='work'&&!cur){location.hash='shelf';return}
   app.innerHTML=r==='shelf'?shelfView():r==='new'?newView():r==='work'?workView():r==='cast'?castView():planView();
@@ -213,7 +229,7 @@ function render(){
   if(r==='work'&&step===3)drawStage();
   if(r==='work')loadPhoto();
 }
-function renderStep(){stopPlay();const b=document.getElementById('stepBox');if(!b){render();return}
+function renderStep(){stopPlay();micStop();const b=document.getElementById('stepBox');if(!b){render();return}
   document.querySelectorAll('.stepper button').forEach((x,i)=>x.setAttribute('aria-current',String(i===step)));
   b.innerHTML=stepHTML();if(step===3)drawStage();loadPhoto()}
 
@@ -304,14 +320,104 @@ function clean(arr){
   return arr.slice(0,6).map(s=>({place:PLACES[s&&s.place]?s.place:'forest',lines:(Array.isArray(s&&s.lines)?s.lines:[]).slice(0,4).map(l=>({who:CAST[l&&l.who]?l.who:'mittu',text:String((l&&l.text)||'').slice(0,240)})).filter(l=>l.text.trim())})).filter(s=>s.lines.length);
 }
 
+
+/* ---------- free scene helper (no AI): splits the child's own sentences into scenes ---------- */
+const WHO_WORDS=[['appu',['ആന','അപ്പു']],['mittu',['തത്ത','മിട്ടു','കിളി','പക്ഷി','കാക്ക','മൈന','കുരുവി']],['kunjan',['അണ്ണാ','കുഞ്ഞൻ','പൂച്ച','മുയൽ','കുരങ്ങ','എലി','പട്ടി','നായ','ആമ']],['meenu',['മീനു','അമ്മു','കുട്ടി','ഞാൻ','കൂട്ടുകാരി']]];
+const PLACE_WORDS=[['river',['പുഴ','നദി','കുളം','കടൽ','തോട്','വെള്ളത്തി','മീൻ']],['school',['സ്കൂൾ','ക്ലാസ്','പള്ളിക്കൂട','ടീച്ചർ','മാഷ്']],['home',['വീട്','അമ്മ','അച്ഛൻ','മുറ്റ','അടുക്കള']],['sky',['ആകാശ','മേഘ','ചന്ദ്ര','നക്ഷത്ര','സൂര്യ','പറന്ന','മഴവില്ല','രാത്രി']],['forest',['കാട','മര','മാവ','തോട്ട','പൂവ','കുന്ന']]];
+function findIn(text,table){for(const [k,words] of table){if(words.some(wd=>text.indexOf(wd)>=0))return k}return null}
+function chunk(sentence,max){
+  const out=[];let curr='';
+  sentence.split(/\s+/).forEach(word=>{if(curr&&(curr+' '+word).length>max){out.push(curr);curr=word}else curr=curr?curr+' '+word:word});
+  if(curr)out.push(curr);return out;
+}
+function autoScenes(text,kind){
+  const paras=String(text||'').split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
+  // sentences (poem: each written line), with very long unpunctuated speech cut at word boundaries
+  let sents=[];
+  paras.forEach((pa,pi)=>{
+    const parts=kind==='poem'?pa.split(/\n+/):pa.replace(/\n+/g,' ').split(/(?<=[.!?।])\s+/);
+    parts.map(x=>x.trim()).filter(Boolean).forEach(x=>chunk(x,110).forEach(c=>sents.push({t:c,p:pi})));
+  });
+  if(!sents.length)return [];
+  // how many scenes: follow paragraphs when they give 4–6, otherwise ~2–3 sentences per scene
+  let n=paras.length>=4&&paras.length<=6?paras.length:Math.round(sents.length/2.5);
+  n=Math.max(1,Math.min(6,Math.min(sents.length,Math.max(4,n))));
+  let groups=[];
+  if(n===paras.length){groups=paras.map((_,pi)=>sents.filter(x=>x.p===pi).map(x=>x.t))}
+  else{const per=sents.length/n;for(let g=0;g<n;g++)groups.push(sents.slice(Math.round(g*per),Math.round((g+1)*per)).map(x=>x.t))}
+  let lastPlace='forest';
+  return groups.filter(g=>g.length).map(g=>{
+    const all=g.join(' ');const place=findIn(all,PLACE_WORDS)||lastPlace;lastPlace=place;
+    // keep at most 3 lines: join the extra sentences onto the last one
+    let lines=g.slice(0,3);if(g.length>3)lines[2]=g.slice(2).join(' ');
+    return {place,lines:lines.map(t=>{
+      const quoted=/["“”'‘’]/.test(t);
+      const who=quoted?(findIn(t,WHO_WORDS)||'meenu'):'mittu';
+      return {who,text:t.slice(0,240)};
+    })};
+  });
+}
+function applyAuto(){
+  const sc=autoScenes(cur.text,cur.kind);
+  if(!sc.length){toast('ആദ്യം കഥ ചേർക്കുക',true);return}
+  cur.scenes=sc;play.s=0;play.l=0;persist(true);renderStep();toast('രംഗങ്ങൾ ഒരുക്കി. ഇനി തിരുത്താം.');
+}
+
+/* ---------- voice typing (browser speech recognition, free) ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition||null;
+let rec=null, recTarget=null;
+const MIC_SVG='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+function micBtn(id,big){
+  if(!SR)return '';
+  return '<button type="button" class="'+(big?'btn ghost mic':'x mic')+'" data-act="mic" data-target="'+id+'" aria-label="പറഞ്ഞ് എഴുതുക">'+MIC_SVG+(big?'<span>പറഞ്ഞ് എഴുതുക</span>':'')+'</button>';
+}
+function micUI(){
+  document.querySelectorAll('[data-act=mic]').forEach(b=>{const on=!!rec&&b.dataset.target===recTarget;b.classList.toggle('on',on);
+    const sp=b.querySelector('span');if(sp)sp.textContent=on?'കേൾക്കുന്നു… നിർത്താൻ അമർത്തുക':'പറഞ്ഞ് എഴുതുക'});
+}
+function micStop(){
+  if(!rec)return;const r=rec;rec=null;recTarget=null;try{r.onend=null;r.stop()}catch(e){}micUI();
+}
+function micStart(id){
+  if(!SR){toast('ഈ ബ്രൗസറിൽ വോയിസ് ഇല്ല. കീബോർഡിലെ മൈക്ക് ഉപയോഗിക്കുക.',true);return}
+  micStop();
+  const el=document.getElementById(id);if(!el)return;
+  let committed=el.value;
+  const r=new SR();r.lang='ml-IN';r.continuous=true;r.interimResults=true;
+  const join=(a,b)=>!a?b:(/[\s\n]$/.test(a)?a+b:a+' '+b);
+  r.onresult=ev=>{
+    const box=document.getElementById(id);if(!box)return;
+    let interim='';
+    for(let i=ev.resultIndex;i<ev.results.length;i++){const t=ev.results[i][0].transcript.trim();if(!t)continue;
+      if(ev.results[i].isFinal)committed=join(committed,t);else interim=join(interim,t)}
+    box.value=interim?join(committed,interim):committed;
+    box.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+  r.onerror=ev=>{
+    if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){toast('മൈക്കിന് അനുമതി വേണം. ബ്രൗസറിന്റെ സെറ്റിംഗ്സിൽ അനുവദിക്കുക.',true);micStop()}
+    else if(ev.error==='network'){toast('വോയിസിന് നെറ്റ് വേണം.',true);micStop()}
+    else if(ev.error==='language-not-supported'){toast('ഈ ഫോണിൽ മലയാളം വോയിസ് ഇല്ല. കീബോർഡിലെ മൈക്ക് ഉപയോഗിക്കുക.',true);micStop()}
+  };
+  // phones stop listening after a pause: start again until the teacher presses stop
+  r.onend=()=>{if(rec!==r)return;const box=document.getElementById(id);if(box)box.value=committed;
+    try{r.start()}catch(e){micStop()}};
+  rec=r;recTarget=id;
+  try{r.start()}catch(e){rec=null;recTarget=null;toast('മൈക്ക് തുടങ്ങാനായില്ല.',true)}
+  micUI();
+}
+
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act, s=+t.dataset.s, l=+t.dataset.l;
   if(a==='open'){const id=t.dataset.id;const src=id==='demo'?DEMO:works.find(w=>w.id===id);if(!src)return;
     cur=JSON.parse(JSON.stringify(src));step=doneSteps(cur)[2]?3:doneSteps(cur)[1]?2:doneSteps(cur)[0]?1:0;if(cur.demo)step=3;play.s=0;play.l=0;bookPage=0;confirmDel=false;go('work')}
-  else if(a==='step'){step=+t.dataset.n;renderStep();window.scrollTo(0,0)}
+  else if(a==='step'){step=+t.dataset.n;confirmRedo=false;renderStep();window.scrollTo(0,0)}
   else if(a==='ocr')doOcr();
   else if(a==='scenes')doScenes();
+  else if(a==='auto'){if(cur.scenes&&cur.scenes.length){confirmRedo=true;renderStep()}else applyAuto()}
+  else if(a==='autoYes'){confirmRedo=false;applyAuto()}
+  else if(a==='autoNo'){confirmRedo=false;renderStep()}
+  else if(a==='mic'){const id=t.dataset.target;if(rec&&recTarget===id)micStop();else micStart(id)}
   else if(a==='saveCode'){const v=(document.getElementById('codeIn')||{}).value;if(v&&v.trim()){setCode(v.trim());renderStep()}}
   else if(a==='clearCode'){setCode('');render();toast('കോഡ് മാറ്റി. അടുത്ത തവണ വീണ്ടും ചോദിക്കും.')}
   else if(a==='install'){if(installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;render()})}}

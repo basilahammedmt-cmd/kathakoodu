@@ -1,5 +1,5 @@
 /* Service worker: lets the app open without internet. Bump VERSION when files change. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
