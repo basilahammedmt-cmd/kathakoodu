@@ -104,8 +104,10 @@ textarea.ruled{display:block}
 .stage.school{background:linear-gradient(90deg,transparent 0 30%,#c9543e 30% 70%,transparent 70%) 0 30%/100% 34% no-repeat,linear-gradient(90deg,transparent 0 36%,#f6e3b4 36% 64%,transparent 64%) 0 76%/100% 40% no-repeat,linear-gradient(#d5eefb 0 66%,#d9c08a 66% 100%)}
 .stage.home{background:linear-gradient(135deg,transparent 0 50%,#b5533c 50%) 26% 34%/24% 22% no-repeat,linear-gradient(225deg,transparent 0 50%,#b5533c 50%) 74% 34%/24% 22% no-repeat,linear-gradient(90deg,transparent 0 26%,#f4e2bd 26% 74%,transparent 74%) 0 82%/100% 46% no-repeat,linear-gradient(#ffe6c2 0 66%,#9bcf7c 66% 100%)}
 .stage.sky{background:radial-gradient(circle at 80% 22%,#ffd84d 0 9%,transparent 9.5%),radial-gradient(ellipse at 24% 30%,#fff 0 13%,transparent 13.5%),radial-gradient(ellipse at 56% 52%,#fff 0 11%,transparent 11.5%),linear-gradient(#8fd0f5,#d8f1fd)}
-.actor{position:absolute;left:5%;bottom:4%;width:34%;animation:bob 1.6s ease-in-out infinite}
+.actor{position:absolute;left:5%;bottom:4%;width:34%;height:62%;display:flex;align-items:flex-end;justify-content:center}
+.actor .body{width:100%;height:100%;display:flex;align-items:flex-end;justify-content:center;transform-origin:50% 100%}
 .actor svg{width:100%;height:auto;display:block}
+.actor img{max-width:100%;max-height:100%;width:auto;height:auto;display:block;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(0,0,0,.18))}
 .bubble{position:absolute;right:4%;top:6%;width:58%;background:var(--bubble);color:var(--stage-ink);border-radius:16px;padding:10px 14px;font-family:var(--hand);font-size:clamp(1rem,4.2vw,1.35rem);line-height:1.55;border:2px solid var(--stage-ink);animation:pop .3s ease-out}
 .bubble b{display:block;font-family:var(--display);font-size:.8em;opacity:.7}
 .dots{display:flex;gap:5px;justify-content:center;flex-wrap:wrap}
@@ -158,3 +160,30 @@ nav.tabs a.add svg{background:var(--crayon);color:var(--crayon-ink);border-radiu
 details.tips{border-top:1px dashed var(--line);padding-top:8px}
 details.tips summary{cursor:pointer;font-weight:600;color:var(--ink)}
 details.tips ul{margin-top:8px}
+
+/* character motion: the outer box moves in along a path, the inner body loops */
+.actor.m-fly{bottom:26%}
+.actor.m-fly.enter{animation:flyIn 1.5s cubic-bezier(.25,.8,.35,1) both}
+.actor.m-hop.enter{animation:hopIn 1.4s linear both}
+.actor.m-walk.enter{animation:walkIn 1.6s ease-out both}
+.actor.m-swim.enter{animation:swimIn 1.8s ease-out both}
+.actor.m-stand.enter{animation:popIn .5s ease-out both}
+.actor.m-fly .body{animation:flap .34s ease-in-out infinite,hover 2.4s ease-in-out infinite}
+.actor.m-hop .body{animation:hop .62s ease-in-out infinite}
+.actor.m-walk .body{animation:waddle .55s ease-in-out infinite}
+.actor.m-swim .body{animation:swim 1.2s ease-in-out infinite;transform-origin:50% 50%}
+.actor.m-stand .body{animation:bob 1.6s ease-in-out infinite}
+.actor.m-still .body{animation:none}
+@keyframes flyIn{0%{transform:translate(-170%,-80%) rotate(-12deg)}45%{transform:translate(-60%,-95%) rotate(-6deg)}75%{transform:translate(-10%,-30%) rotate(4deg)}100%{transform:none}}
+@keyframes hopIn{0%{transform:translate(-160%,0)}12%{transform:translate(-135%,-22%)}25%{transform:translate(-110%,0)}37%{transform:translate(-82%,-22%)}50%{transform:translate(-55%,0)}62%{transform:translate(-30%,-22%)}75%{transform:translate(-8%,0)}100%{transform:none}}
+@keyframes walkIn{from{transform:translateX(-160%)}to{transform:none}}
+@keyframes swimIn{0%{transform:translate(-170%,8%)}50%{transform:translate(-60%,-6%)}100%{transform:none}}
+@keyframes popIn{from{transform:scale(.6);opacity:0}}
+@keyframes flap{0%,100%{transform:scale(1,1)}50%{transform:scale(1.05,.84)}}
+@keyframes hover{0%,100%{translate:0 0}50%{translate:0 -6%}}
+@keyframes hop{0%,100%{transform:translateY(0) scale(1.06,.94)}45%{transform:translateY(-16%) scale(.96,1.05)}}
+@keyframes waddle{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg) translateY(-3%)}}
+@keyframes swim{0%,100%{transform:rotate(-7deg) translateY(0)}50%{transform:rotate(7deg) translateY(-7%)}}
+@media (prefers-reduced-motion:reduce){.actor,.actor .body{animation:none!important}}
+.mini.stage{aspect-ratio:1/1;width:100%;max-width:140px}
+.mini.stage .actor{left:10%;width:80%;bottom:6%;height:80%}

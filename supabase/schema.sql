@@ -45,3 +45,19 @@ create policy "own photos: update" on storage.objects for update to authenticate
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "own photos: delete" on storage.objects for delete to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- 3. Teacher's own characters (image kept inline as a small PNG data URL).
+create table if not exists public.characters (
+  id       text primary key,
+  owner    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  name     text not null check (char_length(name) <= 40),
+  motion   text not null default 'stand' check (motion in ('fly','hop','walk','swim','stand')),
+  mirror   boolean not null default false,
+  img      text not null check (img like 'data:image/png;base64,%' and char_length(img) <= 450000),
+  created  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  updated  bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+alter table public.characters enable row level security;
+drop policy if exists "own characters: all" on public.characters;
+create policy "own characters: all" on public.characters for all to authenticated
+  using (owner = auth.uid()) with check (owner = auth.uid());

@@ -28,15 +28,28 @@ const DEMO={id:'demo',demo:true,title:'തത്തയും മാമ്പഴ�
     {place:'sky',lines:[{who:'mittu',text:'നമുക്ക് ഇത് പങ്കിട്ടു തിന്നാം.'},{who:'appu',text:'ഇനി നമ്മൾ നല്ല കൂട്ടുകാർ!'}]}
   ]};
 
+/* ---------- cast: the four fixed characters + the teacher's own ---------- */
+const MOTIONS={fly:'പറക്കൽ',hop:'ചാട്ടം',walk:'നടത്തം',swim:'നീന്തൽ',stand:'നിൽക്കൽ'};
+const BUILTIN_MOTION={mittu:'fly',appu:'walk',meenu:'walk',kunjan:'hop'};
+let customChars=[];
+function castMap(){
+  const m={};Object.keys(CAST).forEach(k=>{m[k]=Object.assign({motion:BUILTIN_MOTION[k]||'stand'},CAST[k])});
+  customChars.forEach(c=>{m[c.id]={name:c.name,what:'ടീച്ചർ ചേർത്തത്',motion:MOTIONS[c.motion]?c.motion:'stand',custom:true,
+    svg:'<img src="'+c.img+'" alt="'+esc(c.name)+'"'+(c.mirror?' style="transform:scaleX(-1)"':'')+'>'}});
+  return m;
+}
+function isCast(k){return !!(CAST[k]||customChars.some(c=>c.id===k))}
+function castOf(k){const m=castMap();return m[k]||m.mittu}
+
 /* ---------- storage on this device (IndexedDB, with in-memory fallback) ---------- */
 const store=(function(){
-  let dbp=null; const mem={works:new Map(),photos:new Map()};
+  let dbp=null; const mem={works:new Map(),photos:new Map(),chars:new Map()};
   function open(){
     if(dbp)return dbp;
     dbp=new Promise((res)=>{
       try{
-        const rq=indexedDB.open('kathakkoodu',1);
-        rq.onupgradeneeded=()=>{const d=rq.result;if(!d.objectStoreNames.contains('works'))d.createObjectStore('works',{keyPath:'id'});if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos')};
+        const rq=indexedDB.open('kathakkoodu',2);
+        rq.onupgradeneeded=()=>{const d=rq.result;if(!d.objectStoreNames.contains('works'))d.createObjectStore('works',{keyPath:'id'});if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos');if(!d.objectStoreNames.contains('chars'))d.createObjectStore('chars',{keyPath:'id'})};
         rq.onsuccess=()=>res(rq.result);
         rq.onerror=()=>res(null);
         rq.onblocked=()=>res(null);
@@ -58,7 +71,10 @@ const store=(function(){
     put:w=>tx('works','readwrite',st=>st?st.put(w):(mem.works.set(w.id,w),null)),
     del:id=>tx('works','readwrite',st=>st?st.delete(id):(mem.works.delete(id),null)).then(()=>tx('photos','readwrite',st=>st?st.delete(id):(mem.photos.delete(id),null))),
     putPhoto:(id,d)=>tx('photos','readwrite',st=>st?st.put(d,id):(mem.photos.set(id,d),null)),
-    getPhoto:id=>tx('photos','readonly',st=>st?st.get(id):null).then(r=>r||mem.photos.get(id)||null)
+    getPhoto:id=>tx('photos','readonly',st=>st?st.get(id):null).then(r=>r||mem.photos.get(id)||null),
+    clist:()=>tx('chars','readonly',st=>st?st.getAll():null).then(r=>r||[...mem.chars.values()]),
+    cput:c=>tx('chars','readwrite',st=>st?st.put(c):(mem.chars.set(c.id,c),null)),
+    cdel:id=>tx('chars','readwrite',st=>st?st.delete(id):(mem.chars.delete(id),null))
   };
 })();
 
@@ -130,9 +146,32 @@ const data={
     const url=await blobToDataUrl(blob);await store.putPhoto(id,url);return url;
   }
 };
+function toCRow(c){return {id:c.id,name:c.name,motion:c.motion,mirror:!!c.mirror,img:c.img,created:c.created||Date.now(),updated:c.updated||Date.now()}}
+function fromCRow(r){return {id:r.id,name:r.name,motion:r.motion,mirror:!!r.mirror,img:r.img,created:Number(r.created)||0,updated:Number(r.updated)||0}}
+const charData={
+  async list(){
+    const local=(await store.clist()).filter(mine);
+    if(!user)return local;
+    try{
+      const {data:rows,error}=await sb.from('characters').select('*').order('created',{ascending:true});if(error)throw error;
+      const byId=new Map(rows.map(r=>[r.id,fromCRow(r)]));
+      local.forEach(c=>{if(c._dirty&&(!byId.has(c.id)||(c.updated||0)>=(byId.get(c.id).updated||0)))byId.set(c.id,clean0(c))});
+      const ids=new Set(rows.map(r=>r.id));
+      for(const c of local)if(!c._dirty&&!ids.has(c.id))await store.cdel(c.id);
+      for(const r of rows){const lc=local.find(x=>x.id===r.id);if(!lc||!lc._dirty)await store.cput(Object.assign(fromCRow(r),{_owner:user.id}))}
+      return [...byId.values()];
+    }catch(e){return local.map(clean0)}
+  },
+  async put(c){await store.cput(Object.assign({},clean0(c),{_owner:user?user.id:undefined,_dirty:!!user}));if(user)return sync()},
+  async del(id){await store.cdel(id);if(user){const {error}=await sb.from('characters').delete().eq('id',id);if(error)throw error}}
+};
 async function sync(){
   if(!user||syncing)return;syncing=true;
   try{
+    for(const c of (await store.clist()).filter(c=>c._owner===user.id&&c._dirty)){
+      const {error}=await sb.from('characters').upsert(toCRow(c));if(error)throw error;
+      const now=(await store.clist()).find(x=>x.id===c.id);if(now&&(now.updated||0)<=(c.updated||0))await store.cput(Object.assign(now,{_dirty:false}));
+    }
     const todo=(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty));
     for(const w of todo){
       if(w._photoDirty){
@@ -150,19 +189,23 @@ async function sync(){
 }
 async function countPending(){
   const before=pendingCount;
-  pendingCount=user?(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty)).length:0;
+  pendingCount=user?(await store.list()).filter(w=>w._owner===user.id&&(w._dirty||w._photoDirty)).length+(await store.clist()).filter(c=>c._owner===user.id&&c._dirty).length:0;
   if(before!==pendingCount&&route()==='shelf')render();
 }
 async function guestWorks(){return (await store.list()).filter(w=>!w._owner)}
+async function guestChars(){return (await store.clist()).filter(c=>!c._owner)}
 async function moveGuestWorks(){
   if(!user)return;const g=await guestWorks();
   for(const w of g){w._owner=user.id;w._dirty=true;w._photoDirty=!!w.hasPhoto;w.updated=Date.now();await store.put(w)}
+  for(const c of await guestChars()){c._owner=user.id;c._dirty=true;c.updated=Date.now();await store.cput(c)}
   try{await sync();toast(g.length+' സൃഷ്ടികൾ അക്കൗണ്ടിലേക്ക് മാറ്റി')}catch(e){toast('നെറ്റ് വന്നാൽ തനിയെ അപ്‌ലോഡ് ആകും',true)}
   await reloadWorks();
 }
 async function reloadWorks(){
   try{works=(await data.list()).sort((a,b)=>(b.created||0)-(a.created||0))}catch(e){}
-  guestCount=user?(await guestWorks()).length:0;
+  try{customChars=(await charData.list()).sort((a,b)=>(a.created||0)-(b.created||0))}catch(e){}
+  guestCount=user?(await guestWorks()).length+(await guestChars()).length:0;
+  if(route()==='cast')render();
   await countPending();
   if(route()==='shelf')render();
 }
@@ -266,7 +309,7 @@ function newView(){
     '<p class="muted small">മുഴുവൻ പേരോ കുട്ടിയുടെ മുഖമുള്ള ഫോട്ടോയോ ചേർക്കരുത്. സമ്മതപത്രം ഇല്ലാതെ സൃഷ്ടി ചേർക്കാനാവില്ല.</p>'+
     '<div class="row"><button class="btn" type="submit">ചേർക്കുക</button><a class="btn ghost" href="#shelf" style="text-decoration:none">വേണ്ട</a></div></form>';
 }
-function castSel(v,i,j){return '<select data-f="who" data-s="'+i+'" data-l="'+j+'" aria-label="ആര് പറയുന്നു">'+Object.keys(CAST).map(k=>'<option value="'+k+'"'+(k===v?' selected':'')+'>'+CAST[k].name+'</option>').join('')+'</select>'}
+function castSel(v,i,j){const m=castMap();if(!m[v])v='mittu';return '<select data-f="who" data-s="'+i+'" data-l="'+j+'" aria-label="ആര് പറയുന്നു">'+Object.keys(m).map(k=>'<option value="'+esc(k)+'"'+(k===v?' selected':'')+'>'+esc(m[k].name)+'</option>').join('')+'</select>'}
 function codeBox(){
   if(!needCode||getCode())return '';
   return '<div class="codebox"><div class="field"><label for="codeIn">ക്ലാസ് കോഡ്</label><input type="text" id="codeIn" autocomplete="off" placeholder="സ്കൂൾ തന്ന കോഡ്"></div><button class="btn ghost" data-act="saveCode">ശരി</button></div><p class="muted small">Claude ഉപയോഗിക്കാൻ ഒരിക്കൽ കോഡ് നൽകണം.</p>';
@@ -331,8 +374,8 @@ function bookPages(){
   if(!paras.length) p.push('<div class="book"><p class="muted">എഴുത്ത് ചേർത്താൽ ഇവിടെ പേജുകളായി കാണാം.</p></div>');
   paras.forEach((t,i)=>{
     const sc=(w.scenes||[])[Math.min(i,(w.scenes||[]).length-1)];
-    const who=sc&&sc.lines[0]?CAST[sc.lines[0].who]:null;
-    p.push('<div class="book">'+(sc?'<div class="stage '+esc(sc.place)+'" style="aspect-ratio:16/8;flex:none">'+(who?'<div class="actor" style="width:22%;animation:none">'+who.svg+'</div>':'')+'</div>':'')+'<div class="ruled">'+esc(t)+'</div></div>');
+    const who=sc&&sc.lines[0]?castOf(sc.lines[0].who):null;
+    p.push('<div class="book">'+(sc?'<div class="stage '+esc(sc.place)+'" style="aspect-ratio:16/8;flex:none">'+(who?'<div class="actor m-still" style="width:22%"><div class="body">'+who.svg+'</div></div>':'')+'</div>':'')+'<div class="ruled">'+esc(t)+'</div></div>');
   });
   return p;
 }
@@ -344,10 +387,74 @@ function workView(){
     '<div class="stepper" role="tablist">'+STEPS.map((s,i)=>'<button data-act="step" data-n="'+i+'" aria-current="'+(i===step)+'"><b>'+(i+1)+'</b>'+s+'</button>').join('')+'</div>'+
     '<div id="stepBox">'+stepHTML()+'</div>';
 }
+function motionSel(v,attrs){return '<select '+attrs+'>'+Object.keys(MOTIONS).map(k=>'<option value="'+k+'"'+(k===v?' selected':'')+'>'+MOTIONS[k]+'</option>').join('')+'</select>'}
 function castView(){
-  return '<h2>സ്ഥിരം കഥാപാത്രങ്ങൾ</h2><p class="muted">എല്ലാ കഥകളിലും ഈ നാലുപേരാണ് സംസാരിക്കുന്നത്. അതുകൊണ്ട് കുട്ടികൾക്ക് അവരെ പെട്ടെന്ന് പരിചയമാകും.</p><div class="cast">'+
-    Object.keys(CAST).map(k=>{const c=CAST[k];return '<div class="plain">'+c.svg+'<h3>'+c.name+'</h3><span class="chip">'+c.what+'</span><p class="small">'+c.trait+'</p></div>'}).join('')+
-    '</div><p class="note">പേരും സ്വഭാവവും കുട്ടികളോട് ചോദിച്ച് മാറ്റാം. കുട്ടികൾ വരച്ച ചിത്രങ്ങൾ തന്നെ കഥാപാത്രമാക്കുന്നത് അടുത്ത പതിപ്പിൽ ചേർക്കാം.</p>';
+  let h='<h2>കഥാപാത്രങ്ങൾ</h2><p class="muted">ഈ നാലുപേർ എല്ലാ കഥകളിലും ഉണ്ട്. ടീച്ചർക്ക് സ്വന്തം കഥാപാത്രങ്ങളെയും ചേർക്കാം: കിളി, പൂച്ച, കുട്ടികൾ വരച്ച ചിത്രം…</p><div class="cast">'+
+    Object.keys(CAST).map(k=>{const c=CAST[k];return '<div class="plain">'+c.svg+'<h3>'+c.name+'</h3><span class="chip">'+c.what+'</span><p class="small">'+c.trait+'</p></div>'}).join('')+'</div>';
+  h+='<h2>ടീച്ചറുടെ കഥാപാത്രങ്ങൾ</h2>';
+  if(customChars.length){
+    h+='<div class="cast">'+customChars.map(c=>'<div class="plain"><div class="mini stage sky">'+actorHTML(castOf(c.id),false)+'</div><h3>'+esc(c.name)+'</h3>'+
+      motionSel(c.motion,'data-cf="motion" data-id="'+esc(c.id)+'" aria-label="ചലനം"')+
+      '<label class="check small" style="margin:0"><input type="checkbox" data-cf="mirror" data-id="'+esc(c.id)+'"'+(c.mirror?' checked':'')+'><span>തിരിച്ചിടുക</span></label>'+
+      (confirmChar===c.id?'<div class="row"><button class="btn danger" data-act="charDelYes" data-id="'+esc(c.id)+'">കളയുക</button><button class="btn ghost" data-act="charDelNo">വേണ്ട</button></div>':
+       '<button class="btn ghost" data-act="charDel" data-id="'+esc(c.id)+'">കളയുക</button>')+'</div>').join('')+'</div>';
+  }else h+='<p class="muted small">ഇതുവരെ ഒന്നും ചേർത്തിട്ടില്ല.</p>';
+  h+='<form class="plain form" id="charForm"><h3>പുതിയ കഥാപാത്രം ചേർക്കുക</h3>'+
+    '<div class="field"><label for="cName">പേര്</label><input type="text" id="cName" maxlength="30" placeholder="ഉദാ: ചിന്നു കിളി" value="'+esc(draft.name)+'" required></div>'+
+    '<div class="pickrow"><label class="btn ghost pick">'+(draft.img?'മറ്റൊരു ചിത്രം':'ചിത്രം തിരഞ്ഞെടുക്കുക')+'<input type="file" id="cFile" accept="image/png,image/jpeg,image/webp"></label>'+
+    '<label class="btn ghost pick">ക്യാമറ<input type="file" id="cCam" accept="image/*" capture="environment"></label></div>'+
+    '<p class="muted small">പശ്ചാത്തലം ഇല്ലാത്ത PNG ആണ് ഏറ്റവും നല്ലത്. വെള്ള പേപ്പറിൽ വരച്ചതോ ഒറ്റ നിറമുള്ള പശ്ചാത്തലമുള്ളതോ ആയ ചിത്രത്തിന്റെ പശ്ചാത്തലം ആപ്പ് മായ്ക്കും.</p>'+
+    '<label class="check" for="cBg"><input type="checkbox" id="cBg"'+(draft.removeBg?' checked':'')+'><span>പശ്ചാത്തലം മായ്ക്കുക</span></label>'+
+    '<div class="field"><label for="cMotion">എങ്ങനെ അനങ്ങണം</label>'+motionSel(draft.motion,'id="cMotion"')+'</div>'+
+    '<label class="check" for="cMirror"><input type="checkbox" id="cMirror"'+(draft.mirror?' checked':'')+'><span>തിരിച്ചിടുക (ചിത്രം ഇടത്തോട്ട് നോക്കുന്നുണ്ടെങ്കിൽ)</span></label>'+
+    '<div id="prevBox">'+previewHTML()+'</div>'+
+    '<div class="row"><button class="btn" type="submit"'+(draft.img?'':' disabled')+'>കഥാപാത്രം സേവ് ചെയ്യുക</button>'+(draft.img?'<button class="btn ghost" type="button" data-act="replay">വീണ്ടും കാണുക</button>':'')+'</div></form>';
+  return h;
+}
+function previewHTML(){
+  if(!draft.img)return '';
+  const c={name:draft.name||'പുതിയ കഥാപാത്രം',motion:draft.motion,svg:'<img src="'+draft.img+'" alt=""'+(draft.mirror?' style="transform:scaleX(-1)"':'')+'>'};
+  return '<div class="stage '+(draft.motion==='swim'?'river':draft.motion==='fly'?'sky':'forest')+'">'+actorHTML(c,true)+'<div class="bubble"><b>'+esc(c.name)+'</b>നമസ്കാരം കൂട്ടുകാരേ!</div></div>';
+}
+function drawPreview(){const b=document.getElementById('prevBox');if(b)b.innerHTML=previewHTML()}
+
+/* ---------- making a character image: cut away a plain background, crop, shrink ---------- */
+let draft={name:'',img:'',motion:'fly',mirror:false,removeBg:true,src:null}, confirmChar=null;
+function loadImg(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('img'))};im.src=u})}
+function cutout(im,removeBg,max){
+  const k=Math.min(1,max/Math.max(im.width,im.height)),W=Math.max(1,Math.round(im.width*k)),H=Math.max(1,Math.round(im.height*k));
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');g.drawImage(im,0,0,W,H);
+  const id=g.getImageData(0,0,W,H),px=id.data;
+  // already transparent around the edges? then leave it alone
+  let edgeAlpha=0,edgeN=0;for(let x=0;x<W;x++){edgeAlpha+=px[x*4+3]+px[((H-1)*W+x)*4+3];edgeN+=2}
+  const hasAlpha=edgeAlpha/edgeN<200;
+  if(removeBg&&!hasAlpha){
+    // background colour = average of the four corners; flood from every edge pixel that is close to it
+    const corner=[[0,0],[W-1,0],[0,H-1],[W-1,H-1]].map(([x,y])=>(y*W+x)*4);
+    const bg=[0,1,2].map(i=>corner.reduce((a,o)=>a+px[o+i],0)/4);
+    const near=(o,t)=>Math.max(Math.abs(px[o]-bg[0]),Math.abs(px[o+1]-bg[1]),Math.abs(px[o+2]-bg[2]))<t;
+    const seen=new Uint8Array(W*H),stack=[];
+    const push=(x,y)=>{const i=y*W+x;if(!seen[i]&&near(i*4,52)){seen[i]=1;stack.push(i)}};
+    for(let x=0;x<W;x++){push(x,0);push(x,H-1)}for(let y=0;y<H;y++){push(0,y);push(W-1,y)}
+    while(stack.length){const i=stack.pop(),x=i%W,y=(i/W)|0;px[i*4+3]=0;
+      if(x>0)push(x-1,y);if(x<W-1)push(x+1,y);if(y>0)push(x,y-1);if(y<H-1)push(x,y+1)}
+    // soften the edge: half-transparent pixels next to removed ones that are still fairly close to the background
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;if(seen[i])continue;
+      if((seen[i-1]||seen[i+1]||seen[i-W]||seen[i+W])&&near(i*4,90))px[i*4+3]=110}
+    g.putImageData(id,0,0);
+  }
+  // crop to what is left
+  let x0=W,y0=H,x1=-1,y1=-1;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(px[(y*W+x)*4+3]>24){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(x1<0)return null;
+  const pad=4;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(W-1,x1+pad);y1=Math.min(H-1,y1+pad);
+  const out=document.createElement('canvas');out.width=x1-x0+1;out.height=y1-y0+1;out.getContext('2d').drawImage(cv,x0,y0,out.width,out.height,0,0,out.width,out.height);
+  return out.toDataURL('image/png');
+}
+function makeCharImg(){
+  if(!draft.src)return;
+  let d=null;for(const max of [480,380,300,240]){d=cutout(draft.src,draft.removeBg,max);if(!d||d.length<380000)break}
+  if(!d){toast('ചിത്രത്തിൽ ഒന്നും ബാക്കിയില്ല. "പശ്ചാത്തലം മായ്ക്കുക" ഓഫ് ചെയ്തുനോക്കൂ.',true);d=cutout(draft.src,false,300)}
+  draft.img=d||'';
 }
 function planView(){
   return '<h2>ആപ്പിന്റെ ഘടന</h2>'+
@@ -355,15 +462,15 @@ function planView(){
     '<div><b>ഷെൽഫ്</b><div class="muted small">ക്ലാസ്സിലെ എല്ലാ സൃഷ്ടികളും, ഓരോന്നും ഏത് ഘട്ടത്തിൽ എന്ന്</div></div>'+
     '<div><b>പുതിയ സൃഷ്ടി</b><div class="muted small">പേര്, കുട്ടിയുടെ ആദ്യപേര്, ഇനം, സമ്മതപത്രം</div></div>'+
     '<div><b>സൃഷ്ടിയുടെ പേജ്</b><div class="kid small"><div>1 ഫോട്ടോ: ക്യാമറയിലോ ഗാലറിയിലോ നിന്ന് പേപ്പറിന്റെ ഫോട്ടോ</div><div>2 എഴുത്ത്: കൈയക്ഷരം ടെക്സ്റ്റാക്കുക, ടീച്ചർ തിരുത്തുക</div><div>3 രംഗങ്ങൾ: 4–6 രംഗങ്ങളും സംഭാഷണവും</div><div>4 കാണുക: കഥാപാത്രങ്ങൾ സംസാരിക്കുന്ന ആനിമേഷൻ</div><div>5 ബുക്ക്: മറിച്ചുനോക്കാവുന്ന പുസ്തകം</div></div></div>'+
-    '<div><b>കഥാപാത്രങ്ങൾ</b><div class="muted small">മിട്ടു, അപ്പു, മീനു, കുഞ്ഞൻ</div></div></div>'+
-  '<div class="plain form"><h3>ഇപ്പോൾ പ്രവർത്തിക്കുന്നത്</h3><ul class="tight"><li>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാവുന്ന വെബ് ആപ്പ്, നെറ്റ് ഇല്ലെങ്കിലും തുറക്കും</li><li>ഫോണിന്റെ ക്യാമറയിൽ നിന്ന് നേരിട്ട് ഫോട്ടോ</li><li>ടീച്ചർക്ക് ടൈപ്പ് ചെയ്യാം, അല്ലെങ്കിൽ മൈക്ക് അമർത്തി പറഞ്ഞ് എഴുതാം (ഫ്രീ)</li><li>രംഗ സഹായി: കുട്ടിയുടെ വാചകങ്ങൾ തനിയെ രംഗങ്ങളാക്കുന്നു, ടീച്ചർ തിരുത്തുന്നു (ഫ്രീ)</li><li>ആനിമേഷനായും പുസ്തകമായും കാണാം</li><li>സൃഷ്ടികൾ ഈ ഉപകരണത്തിൽ സേവ് ആകുന്നു</li></ul>'+
-    '<h3>ഇനി ചേർക്കേണ്ടത്</h3><ul class="tight"><li>ടീച്ചർ ലോഗിൻ, എല്ലാ ഫോണിലും കാണാവുന്ന ക്ലൗഡ് സേവ് (Supabase)</li><li>കുട്ടിയുടെ സ്വന്തം ശബ്ദം റെക്കോർഡ് ചെയ്യൽ</li><li>MP4 വീഡിയോ ആയും PDF പുസ്തകമായും ഡൗൺലോഡ്</li><li>രക്ഷിതാക്കൾക്ക് QR കോഡ് വഴി പങ്കുവെക്കൽ</li><li>കുട്ടി വരച്ച ചിത്രം തന്നെ അനക്കൽ</li></ul></div>'+
+    '<div><b>കഥാപാത്രങ്ങൾ</b><div class="muted small">മിട്ടു, അപ്പു, മീനു, കുഞ്ഞൻ, ഒപ്പം ടീച്ചർ ചേർക്കുന്നവരും</div></div></div>'+
+  '<div class="plain form"><h3>ഇപ്പോൾ പ്രവർത്തിക്കുന്നത്</h3><ul class="tight"><li>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാവുന്ന വെബ് ആപ്പ്, നെറ്റ് ഇല്ലെങ്കിലും തുറക്കും</li><li>ഫോണിന്റെ ക്യാമറയിൽ നിന്ന് നേരിട്ട് ഫോട്ടോ</li><li>ടീച്ചർക്ക് ടൈപ്പ് ചെയ്യാം, അല്ലെങ്കിൽ മൈക്ക് അമർത്തി പറഞ്ഞ് എഴുതാം (ഫ്രീ)</li><li>രംഗ സഹായി: കുട്ടിയുടെ വാചകങ്ങൾ തനിയെ രംഗങ്ങളാക്കുന്നു, ടീച്ചർ തിരുത്തുന്നു (ഫ്രീ)</li><li>ടീച്ചർക്ക് സ്വന്തം കഥാപാത്രം ചേർക്കാം; അത് പറന്നും ചാടിയും നീന്തിയും വന്ന് സംസാരിക്കും (ഫ്രീ)</li><li>ആനിമേഷനായും പുസ്തകമായും കാണാം</li><li>ടീച്ചർ ലോഗിൻ, ഏത് ഫോണിലും കാണാവുന്ന ക്ലൗഡ് സേവ്</li></ul>'+
+    '<h3>ഇനി ചേർക്കേണ്ടത്</h3><ul class="tight"><li>കുട്ടിയുടെ സ്വന്തം ശബ്ദം റെക്കോർഡ് ചെയ്യൽ</li><li>MP4 വീഡിയോ ആയും PDF പുസ്തകമായും ഡൗൺലോഡ്</li><li>രക്ഷിതാക്കൾക്ക് QR കോഡ് വഴി പങ്കുവെക്കൽ</li></ul></div>'+
   '<div class="plain form"><h3>ഫോണിൽ ഇൻസ്റ്റാൾ ചെയ്യാൻ</h3><p>മറ്റ് ടീച്ചർമാർക്ക് ഈ ലിങ്ക് അയച്ചാൽ മതി (QR കോഡും അവിടെയുണ്ട്): <a href="/install">'+esc(location.host)+'/install</a></p><dl class="kv"><dt>Android</dt><dd>Chrome-ൽ ഈ സൈറ്റ് തുറന്ന് മെനുവിലെ "Install app" / "Add to Home screen".</dd><dt>iPhone</dt><dd>Safari-യിൽ തുറന്ന് Share → "Add to Home Screen".</dd><dt>കമ്പ്യൂട്ടർ</dt><dd>Chrome/Edge-ൽ അഡ്രസ് ബാറിലെ ഇൻസ്റ്റാൾ ഐക്കൺ.</dd></dl>'+
     (needCode&&getCode()?'<div class="row"><button class="btn ghost" data-act="clearCode">ക്ലാസ് കോഡ് മാറ്റുക</button></div>':'')+'</div>';
 }
 
 function render(){
-  stopPlay();micStop();
+  stopPlay();micStop();drawStage.last=null;
   const r=route();
   if(r==='work'&&!cur){location.hash='shelf';return}
   app.innerHTML=r==='shelf'?shelfView():r==='new'?newView():r==='work'?workView():r==='cast'?castView():r==='login'?loginView():planView();
@@ -376,11 +483,14 @@ function renderStep(){stopPlay();micStop();const b=document.getElementById('step
   b.innerHTML=stepHTML();if(step===3)drawStage();loadPhoto()}
 
 /* ---------- player ---------- */
+function actorHTML(c,enter){return '<div class="actor m-'+c.motion+(enter?' enter':'')+'"><div class="body">'+c.svg+'</div></div>'}
 function drawStage(){
   const box=document.getElementById('stageBox');if(!box||!cur)return;
   const sc=cur.scenes[play.s]||cur.scenes[0];if(!sc)return;
-  const ln=sc.lines[play.l]||sc.lines[0]||{who:'mittu',text:''};const c=CAST[ln.who]||CAST.mittu;
-  box.innerHTML='<div class="stage '+esc(sc.place)+'"><div class="actor">'+c.svg+'</div><div class="bubble"><b>'+c.name+'</b>'+esc(ln.text)+'</div></div>';
+  const ln=sc.lines[play.l]||sc.lines[0]||{who:'mittu',text:''};const c=castOf(ln.who);
+  // the character flies/walks in only when the speaker or the scene changes
+  const key=play.s+'|'+ln.who, enter=key!==drawStage.last;drawStage.last=key;
+  box.innerHTML='<div class="stage '+esc(sc.place)+'">'+actorHTML(c,enter)+'<div class="bubble"><b>'+esc(c.name)+'</b>'+esc(ln.text)+'</div></div>';
   let d='';cur.scenes.forEach((s,i)=>{d+='<i class="'+(i<=play.s?'on':'')+'"></i>'});
   const dots=document.getElementById('dots');if(dots)dots.innerHTML=d;
   const pb=document.getElementById('playBtn');if(pb)pb.textContent=play.on?'നിർത്തുക':'പ്ലേ';
@@ -459,7 +569,7 @@ async function doScenes(){
 }
 function clean(arr){
   if(!Array.isArray(arr))return [];
-  return arr.slice(0,6).map(s=>({place:PLACES[s&&s.place]?s.place:'forest',lines:(Array.isArray(s&&s.lines)?s.lines:[]).slice(0,4).map(l=>({who:CAST[l&&l.who]?l.who:'mittu',text:String((l&&l.text)||'').slice(0,240)})).filter(l=>l.text.trim())})).filter(s=>s.lines.length);
+  return arr.slice(0,6).map(s=>({place:PLACES[s&&s.place]?s.place:'forest',lines:(Array.isArray(s&&s.lines)?s.lines:[]).slice(0,4).map(l=>({who:isCast(l&&l.who)?l.who:'mittu',text:String((l&&l.text)||'').slice(0,240)})).filter(l=>l.text.trim())})).filter(s=>s.lines.length);
 }
 
 
@@ -494,7 +604,8 @@ function autoScenes(text,kind){
     let lines=g.slice(0,3);if(g.length>3)lines[2]=g.slice(2).join(' ');
     return {place,lines:lines.map(t=>{
       const quoted=/["“”'‘’]/.test(t);
-      const who=quoted?(findIn(t,WHO_WORDS)||'meenu'):'mittu';
+      const custom=findIn(t,customChars.map(c=>[c.id,[c.name]]));
+      const who=custom||(quoted?(findIn(t,WHO_WORDS)||'meenu'):'mittu');
       return {who,text:t.slice(0,240)};
     })};
   });
@@ -557,6 +668,10 @@ document.addEventListener('click',e=>{
   else if(a==='ocr')doOcr();
   else if(a==='scenes')doScenes();
   else if(a==='logout')doLogout();
+  else if(a==='replay')drawPreview();
+  else if(a==='charDel'){confirmChar=t.dataset.id;render()}
+  else if(a==='charDelNo'){confirmChar=null;render()}
+  else if(a==='charDelYes'){const id=t.dataset.id;confirmChar=null;customChars=customChars.filter(c=>c.id!==id);charData.del(id).then(()=>toast('കളഞ്ഞു'),()=>toast('ക്ലൗഡിൽ നിന്ന് കളയാനായില്ല',true));render()}
   else if(a==='moveGuest')moveGuestWorks();
   else if(a==='syncNow')sync().then(()=>toast('എല്ലാം അപ്‌ലോഡ് ആയി'),()=>toast('ഇപ്പോഴും നെറ്റ് ഇല്ല',true));
   else if(a==='forgot')doForgot();
@@ -581,6 +696,7 @@ document.addEventListener('click',e=>{
   else if(a==='delYes'){const id=cur.id;cur=null;confirmDel=false;works=works.filter(w=>w.id!==id);chain=chain.then(()=>data.del(id)).then(()=>toast('കളഞ്ഞു'),()=>toast(user?'ക്ലൗഡിൽ നിന്ന് കളയാനായില്ല. നെറ്റ് നോക്കുക.':'കളയാനായില്ല',true));go('shelf')}
 });
 document.addEventListener('input',e=>{
+  if(e.target.id==='cName'){draft.name=e.target.value;const b=document.querySelector('#prevBox .bubble b');if(b)b.textContent=draft.name||'പുതിയ കഥാപാത്രം';return}
   const t=e.target,f=t.dataset&&t.dataset.f;if(!f||!cur||cur.demo)return;
   if(f==='text'){cur.text=t.value;persistSoon()}
   else if(f==='line'){cur.scenes[+t.dataset.s].lines[+t.dataset.l].text=t.value;persistSoon()}
@@ -588,6 +704,14 @@ document.addEventListener('input',e=>{
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('photoIn')){onPhoto(t.files&&t.files[0]);t.value='';return}
+  if(t.id==='cFile'||t.id==='cCam'){const f=t.files&&t.files[0];t.value='';if(!f)return;
+    loadImg(f).then(im=>{draft.src=im;draft.name=(document.getElementById('cName')||{}).value||draft.name;makeCharImg();render()},()=>toast('ഈ ചിത്രം തുറക്കാനായില്ല',true));return}
+  if(t.id==='cBg'){draft.removeBg=t.checked;makeCharImg();drawPreview();return}
+  if(t.id==='cMotion'){draft.motion=t.value;drawPreview();return}
+  if(t.id==='cMirror'){draft.mirror=t.checked;drawPreview();return}
+  if(t.dataset&&t.dataset.cf){const c=customChars.find(x=>x.id===t.dataset.id);if(!c)return;
+    if(t.dataset.cf==='motion')c.motion=t.value;else c.mirror=t.checked;c.updated=Date.now();
+    charData.put(c).catch(()=>{});render();return}
   const f=t.dataset&&t.dataset.f;if(!f||!cur)return;
   if(f==='who')cur.scenes[+t.dataset.s].lines[+t.dataset.l].who=t.value;
   else if(f==='place')cur.scenes[+t.dataset.s].place=t.value;
@@ -603,6 +727,15 @@ document.addEventListener('submit',e=>{
   step=0;play.s=0;play.l=0;bookPage=0;confirmDel=false;persist();go('work');
 });
 document.addEventListener('submit',async e=>{
+  if(e.target.id==='charForm'){
+    e.preventDefault();const name=(document.getElementById('cName').value||'').trim();
+    if(!name){toast('കഥാപാത്രത്തിന് ഒരു പേര് നൽകുക',true);return}
+    if(!draft.img){toast('ആദ്യം ഒരു ചിത്രം തിരഞ്ഞെടുക്കുക',true);return}
+    const c={id:'c_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name,motion:draft.motion,mirror:draft.mirror,img:draft.img,created:Date.now(),updated:Date.now()};
+    customChars.push(c);draft={name:'',img:'',motion:'fly',mirror:false,removeBg:true,src:null};
+    charData.put(c).then(()=>toast(name+' ചേർത്തു. ഇനി രംഗങ്ങളിൽ "ആര് പറയുന്നു" ലിസ്റ്റിൽ കാണാം.'),()=>toast('ഫോണിൽ സേവ് ചെയ്തു. നെറ്റ് വന്നാൽ അപ്‌ലോഡ് ആകും.'));
+    render();window.scrollTo(0,0);return;
+  }
   if(e.target.id==='loginForm'){
     e.preventDefault();if(authBusy||!sb)return;
     const mode=(e.submitter&&e.submitter.dataset.mode)||'in';
@@ -638,6 +771,7 @@ async function doLogout(){
   if(pendingCount){toast('ചില സൃഷ്ടികൾ ഇനിയും അപ്‌ലോഡ് ആകാനുണ്ട്. നെറ്റ് ഉള്ളപ്പോൾ ലോഗൗട്ട് ചെയ്യുക.',true);return}
   // remove this teacher's copies from the device so the next person on this phone can't see them
   const uid=user.id;for(const w of (await store.list()).filter(x=>x._owner===uid))await store.del(w.id);
+  for(const c of (await store.clist()).filter(x=>x._owner===uid))await store.cdel(c.id);
   await sb.auth.signOut();user=null;cur=null;works=[];await reloadWorks();toast('ലോഗൗട്ട് ചെയ്തു');go('shelf');
 }
 window.addEventListener('hashchange',render);
@@ -647,7 +781,7 @@ window.addEventListener('appinstalled',()=>{installEvt=null;toast('ഫോണി�
 /* ---------- boot ---------- */
 render();
 (async function(){
-  try{persistent=await store.persistent();works=(await store.list()).sort((a,b)=>(b.created||0)-(a.created||0))}catch(e){persistent=false}
+  try{persistent=await store.persistent();works=(await store.list()).filter(w=>!w._owner).sort((a,b)=>(b.created||0)-(a.created||0));customChars=(await store.clist()).filter(c=>!c._owner)}catch(e){persistent=false}
   loaded=true;try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
   if(route()==='shelf')render();
   let cfg={};
