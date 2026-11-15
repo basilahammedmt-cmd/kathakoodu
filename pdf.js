@@ -88,5 +88,5 @@ const KKPdf=(function(){
   }
   // ASCII only: some phones refuse Malayalam file names and save as "download"
   function fileName(w){const d=new Date(w.created||Date.now()),p=n=>String(n).padStart(2,'0');return 'kathakoodu-'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+String(w.id||'').replace(/[^a-z0-9]/gi,'').slice(-4)+'.pdf'}
-  return {make,fileName};
+  return {make,fileName,draw:{place,wrap,rr,img,svgSrc,FONT}};
 })();

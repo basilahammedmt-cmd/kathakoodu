@@ -724,13 +724,50 @@ async function sharePdf(){
   try{await navigator.share({files:[f],title:cur.title,text:cur.title+' — '+cur.child})}catch(e){}
 }
 
+/* ---------- video (MP4 where the phone can) ---------- */
+let vidState={busy:false,blob:null,url:'',ext:'',for:null,ctl:null};
+function videoBlock(w){
+  if(!(w.scenes&&w.scenes.length))return '';
+  if(typeof KKVideo==='undefined'||!KKVideo.supported())return '<p class="muted small">ഈ ബ്രൗസറിൽ വീഡിയോ ഉണ്ടാക്കാനാവില്ല. Android-ലെ Chrome-ൽ ശ്രമിക്കുക.</p>';
+  let h='<div class="row">';
+  if(vidState.busy&&vidState.for===w.id)h+='<button class="btn" disabled id="vidBtn">വീഡിയോ ഒരുക്കുന്നു… <span id="vidProg">0</span>%</button><button class="btn ghost" data-act="vidCancel">നിർത്തുക</button>';
+  else if(vidState.blob&&vidState.for===w.id){
+    const canShareFile=(()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File([vidState.blob],'a.'+vidState.ext,{type:vidState.blob.type})]}))}catch(e){return false}})();
+    h+='<a class="btn" href="'+vidState.url+'" download="'+esc(KKVideo.fileName(w,vidState.ext))+'" style="text-decoration:none">വീഡിയോ സേവ് ചെയ്യുക ('+vidState.ext.toUpperCase()+')</a>'+
+      (canShareFile?'<button class="btn ghost" data-act="vidShare">WhatsApp / മറ്റുള്ളവ വഴി അയക്കുക</button>':'')+'<button class="btn ghost" data-act="video">വീണ്ടും ഉണ്ടാക്കുക</button>';
+  }
+  else h+='<button class="btn" data-act="video"'+(vidState.busy?' disabled':'')+'>'+(KKVideo.willBeMp4()?'MP4 വീഡിയോ ഉണ്ടാക്കുക':'വീഡിയോ ഉണ്ടാക്കുക (WebM)')+'</button>';
+  h+='</div><p class="muted small">കഥാപാത്രങ്ങളും കുട്ടിയുടെ ശബ്ദവും ചേർന്ന വീഡിയോ. കഥയുടെ നീളത്തിന്റെ അത്രയും സമയം എടുക്കും; അതുവരെ സ്ക്രീൻ ഓണാക്കി ഈ പേജിൽ തന്നെ നിൽക്കുക.'+
+    (KKVideo.willBeMp4()?'':' ഈ ബ്രൗസർ MP4 ഉണ്ടാക്കില്ല; WhatsApp-ന് MP4 വേണമെങ്കിൽ പുതിയ Chrome-ലോ iPhone-ലെ Safari-യിലോ ഉണ്ടാക്കുക.')+'</p>';
+  return h;
+}
+async function makeVideo(){
+  if(vidState.busy||!cur)return;const w=cur;
+  if(vidState.url)URL.revokeObjectURL(vidState.url);
+  const ctl=new AbortController();vidState={busy:true,blob:null,url:'',ext:'',for:w.id,ctl};renderStep();
+  let wake=null;try{wake=navigator.wakeLock&&await navigator.wakeLock.request('screen')}catch(e){}
+  try{
+    const r=await KKVideo.make(w,castOf,id=>audioData.get(id),f=>{const el=document.getElementById('vidProg');if(el)el.textContent=Math.round(f*100)},ctl.signal);
+    vidState={busy:false,blob:r.blob,url:URL.createObjectURL(r.blob),ext:r.ext,for:w.id,ctl:null};
+    const a=document.createElement('a');a.href=vidState.url;a.download=KKVideo.fileName(w,r.ext);document.body.appendChild(a);a.click();a.remove();
+    toast('വീഡിയോ തയ്യാർ');
+  }catch(e){vidState={busy:false,blob:null,url:'',ext:'',for:null,ctl:null};if(!(e&&e.message==='aborted'))toast('വീഡിയോ ഉണ്ടാക്കാനായില്ല',true)}
+  try{wake&&wake.release()}catch(e){}
+  if(cur===w&&route()==='work')renderStep();
+}
+async function shareVideo(){
+  if(!vidState.blob||!cur)return;
+  const f=new File([vidState.blob],KKVideo.fileName(cur,vidState.ext),{type:vidState.blob.type});
+  try{await navigator.share({files:[f],title:cur.title,text:cur.title+' — '+cur.child})}catch(e){}
+}
+
 /* ---------- parents' link + QR (a public copy in the "shared" bucket) ---------- */
 let shareBusy=false, confirmUnshare=false;
 function shareURL(w){return location.origin+'/view#'+w.share}
 function sharePanel(){
   const w=cur;if(!w||w.demo)return '';
   let h='<div class="plain form"><h3>പങ്കിടുക</h3><div class="row">'+pdfButtons(w)+'</div>'+
-    '<p class="muted small">കവർ, കുട്ടിയുടെ കൈയക്ഷരം, ഓരോ ഭാഗവും ചിത്രത്തോടെ — A5 പുസ്തകം. പ്രിന്റ് ചെയ്യാനും അയക്കാനും.</p>';
+    '<p class="muted small">കവർ, കുട്ടിയുടെ കൈയക്ഷരം, ഓരോ ഭാഗവും ചിത്രത്തോടെ — A5 പുസ്തകം. പ്രിന്റ് ചെയ്യാനും അയക്കാനും.</p>'+videoBlock(w);
   h+='<h3>രക്ഷിതാക്കൾക്ക് QR കോഡ്</h3>';
   if(!sbConfigured||!sb) return h+'<p class="muted small">ഇതിന് ക്ലൗഡ് സേവ് (Supabase) സജ്ജമാക്കണം.</p></div>';
   if(!user) return h+'<p class="muted small">ലോഗിൻ ചെയ്താൽ രക്ഷിതാക്കൾക്ക് ഫോണിൽ കാണാനുള്ള ലിങ്കും QR കോഡും ഉണ്ടാക്കാം. <a href="#login">ലോഗിൻ</a></p></div>';
@@ -791,7 +828,7 @@ async function doUnshare(){
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;const a=t.dataset.act, s=+t.dataset.s, l=+t.dataset.l;
   if(a==='open'){const id=t.dataset.id;const src=id==='demo'?DEMO:works.find(w=>w.id===id);if(!src)return;
-    pdfState={busy:false,blob:null,url:'',for:null};confirmUnshare=false;cur=JSON.parse(JSON.stringify(src));step=doneSteps(cur)[2]?3:doneSteps(cur)[1]?2:doneSteps(cur)[0]?1:0;if(cur.demo)step=3;play.s=0;play.l=0;bookPage=0;confirmDel=false;go('work')}
+    pdfState={busy:false,blob:null,url:'',for:null};if(!vidState.busy)vidState={busy:false,blob:null,url:'',ext:'',for:null,ctl:null};confirmUnshare=false;cur=JSON.parse(JSON.stringify(src));step=doneSteps(cur)[2]?3:doneSteps(cur)[1]?2:doneSteps(cur)[0]?1:0;if(cur.demo)step=3;play.s=0;play.l=0;bookPage=0;confirmDel=false;go('work')}
   else if(a==='step'){step=+t.dataset.n;confirmRedo=false;renderStep();window.scrollTo(0,0)}
   else if(a==='ocr')doOcr();
   else if(a==='scenes')doScenes();
@@ -800,6 +837,9 @@ document.addEventListener('click',e=>{
   else if(a==='hear')hear(s,l);
   else if(a==='unrec'){const ln=cur.scenes[s].lines[l];if(ln.aud){audioData.del(ln.aud);delete ln.aud;persist(true);renderStep()}}
   else if(a==='pdf')makePdf();
+  else if(a==='video')makeVideo();
+  else if(a==='vidShare')shareVideo();
+  else if(a==='vidCancel'){if(vidState.ctl)vidState.ctl.abort()}
   else if(a==='pdfShare')sharePdf();
   else if(a==='share')doShare();
   else if(a==='unshare'){confirmUnshare=true;renderStep()}

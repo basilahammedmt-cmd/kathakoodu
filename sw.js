@@ -1,6 +1,6 @@
 /* Service worker: lets the app open without internet. Bump VERSION when files change. */
-const VERSION = 'v6';
-const SHELL = ['/', '/index.html', '/install.html', '/styles.css', '/cast.js', '/pdf.js', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+const VERSION = 'v7';
+const SHELL = ['/', '/index.html', '/install.html', '/styles.css', '/cast.js', '/pdf.js', '/video.js', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open('shell-' + VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

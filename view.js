@@ -5,7 +5,7 @@ const app=document.getElementById('app'), toastEl=document.getElementById('toast
 function toast(m,bad){toastEl.textContent=m;toastEl.className=bad?'bad':'';toastEl.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>{toastEl.hidden=true},2600)}
 function fail(msg){app.innerHTML='<header class="board"><h1>കഥക്കൂട്</h1><p>'+esc(msg)+'</p><span class="chalk" aria-hidden="true"></span></header>'}
 
-let w=null, root='', castOf=null, play={s:0,l:0,on:false,timer:null}, bookPage=0, voice=null, last=null, pdf={busy:false,url:''};
+let w=null, root='', castOf=null, play={s:0,l:0,on:false,timer:null}, bookPage=0, voice=null, last=null, pdf={busy:false,url:''}, vid={busy:false,url:'',ext:''};
 
 function stopVoice(){if(voice){voice.onended=null;try{voice.pause()}catch(e){}voice=null}}
 function stageHTML(){
@@ -41,12 +41,17 @@ function bookHTML(){
   const pages=bookPagesFor(w,castOf,w.photo?root+w.photo:null);bookPage=Math.min(bookPage,pages.length-1);
   return pages[bookPage]+'<div class="row between"><button class="btn ghost" data-act="bprev"'+(bookPage===0?' disabled':'')+'>മുൻ പേജ്</button><span class="muted small">'+(bookPage+1)+' / '+pages.length+'</span><button class="btn ghost" data-act="bnext"'+(bookPage>=pages.length-1?' disabled':'')+'>അടുത്ത പേജ്</button></div>';
 }
+function videoBtn(){
+  if(!(w.scenes&&w.scenes.length)||typeof KKVideo==='undefined'||!KKVideo.supported())return '';
+  if(vid.url)return '<a class="btn" style="text-decoration:none" href="'+vid.url+'" download="'+esc(KKVideo.fileName(w,vid.ext))+'">വീഡിയോ സേവ് ചെയ്യുക</a>';
+  return '<button class="btn" data-act="video"'+(vid.busy?' disabled':'')+'>'+(vid.busy?'വീഡിയോ ഒരുക്കുന്നു… <span id="vidProg">0</span>%':'വീഡിയോ ഡൗൺലോഡ് ചെയ്യുക')+'</button>';
+}
 function render(){
   const hasScenes=w.scenes&&w.scenes.length;
   app.innerHTML='<header class="board"><h1>'+esc(w.title)+'</h1><p>'+esc(KINDS[w.kind]||'കഥ')+' · എഴുതിയത്: '+esc(w.child)+' · ക്ലാസ് 4</p><span class="chalk" aria-hidden="true"></span></header>'+
     (hasScenes?'<div class="form"><div id="stageBox"></div><div class="row" style="justify-content:center"><button class="btn ghost" data-act="prev">മുമ്പത്തേത്</button><button class="btn" data-act="play" id="playBtn">പ്ലേ</button><button class="btn ghost" data-act="next">അടുത്തത്</button></div><div class="dots" id="dots"></div></div>':'')+
     '<h2>പുസ്തകം</h2><div class="form" id="bookBox">'+bookHTML()+'</div>'+
-    '<div class="plain row">'+(pdf.url?'<a class="btn" style="text-decoration:none" href="'+pdf.url+'" download="'+esc(KKPdf.fileName(w))+'">PDF സേവ് ചെയ്യുക</a>':'<button class="btn" data-act="pdf"'+(pdf.busy?' disabled':'')+'>'+(pdf.busy?'PDF ഒരുക്കുന്നു…':'PDF ആയി ഡൗൺലോഡ് ചെയ്യുക')+'</button>')+'</div>'+
+    '<div class="plain row">'+videoBtn()+(pdf.url?'<a class="btn" style="text-decoration:none" href="'+pdf.url+'" download="'+esc(KKPdf.fileName(w))+'">PDF സേവ് ചെയ്യുക</a>':'<button class="btn" data-act="pdf"'+(pdf.busy?' disabled':'')+'>'+(pdf.busy?'PDF ഒരുക്കുന്നു…':'PDF ആയി ഡൗൺലോഡ് ചെയ്യുക')+'</button>')+'</div>'+
     '<p class="muted small foot">ടീച്ചർ പങ്കിട്ടത് · കഥക്കൂട്</p>';
   if(hasScenes)drawStage();
 }
@@ -56,6 +61,14 @@ document.addEventListener('click',async e=>{
   else if(a==='next'){advance(1);if(play.on)tick()}
   else if(a==='prev'){advance(-1);if(play.on)tick()}
   else if(a==='bnext'||a==='bprev'){bookPage=Math.max(0,bookPage+(a==='bnext'?1:-1));document.getElementById('bookBox').innerHTML=bookHTML()}
+  else if(a==='video'){
+    if(vid.busy)return;vid.busy=true;render();
+    try{const r=await KKVideo.make(w,castOf,aud=>fetch(root+'a/'+encodeURIComponent(aud)).then(x=>x.ok?x.blob():null,()=>null),f=>{const el=document.getElementById('vidProg');if(el)el.textContent=Math.round(f*100)});
+      vid={busy:false,url:URL.createObjectURL(r.blob),ext:r.ext};
+      const x=document.createElement('a');x.href=vid.url;x.download=KKVideo.fileName(w,r.ext);document.body.appendChild(x);x.click();x.remove()}
+    catch(err){vid={busy:false,url:'',ext:''};toast('വീഡിയോ ഉണ്ടാക്കാനായില്ല',true)}
+    render();
+  }
   else if(a==='pdf'){
     pdf.busy=true;render();
     try{const blob=await KKPdf.make(w,castOf,w.photo?root+w.photo:null);pdf={busy:false,url:URL.createObjectURL(blob)};
